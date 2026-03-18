@@ -350,6 +350,155 @@ class ModelResults:
 
         return result
 
+    def reliability(self) -> dict:
+        """Compute reliability measures for each latent factor.
+
+        Returns
+        -------
+        dict
+            Factor name -> dict with 'omega' (McDonald's omega) and
+            'alpha' (Cronbach's alpha from model-implied covariance).
+
+        Notes
+        -----
+        McDonald's omega = (sum of loadings)^2 / ((sum of loadings)^2 + sum of residual variances)
+        Cronbach's alpha = (k / (k-1)) * (1 - sum(diag(Sigma_f)) / sum(Sigma_f))
+        where Sigma_f is the model-implied covariance for the factor's indicators.
+        """
+        A_opt, S_opt = self._spec.unpack(self._theta)
+
+        # Group indicators by factor
+        factor_indicators: dict[str, list[str]] = {}
+        for p in self._spec.params:
+            if p.op == "=~":
+                factor_indicators.setdefault(p.lhs, []).append(p.rhs)
+
+        # Model-implied covariance of observed variables
+        sigma = _model_implied_cov(A_opt, S_opt, self._spec.F)
+        if sigma is None:
+            return {}
+
+        result = {}
+        for lv, indicators in factor_indicators.items():
+            if len(indicators) < 2:
+                continue
+
+            # Get loadings and residual variances for this factor
+            lv_idx = self._spec._idx(lv)
+            lv_var = S_opt[lv_idx, lv_idx]  # latent variance (in S, not total)
+
+            loadings = []
+            resid_vars = []
+            obs_indices = []
+            for ind in indicators:
+                i = self._spec._idx(ind)
+                loading = A_opt[i, lv_idx]
+                loadings.append(loading)
+                resid_vars.append(S_opt[i, i])
+                obs_indices.append(self._spec.observed_vars.index(ind))
+
+            loadings = np.array(loadings)
+            resid_vars = np.array(resid_vars)
+
+            # McDonald's omega
+            sum_loadings = np.sum(loadings)
+            omega_num = (sum_loadings ** 2) * lv_var
+            omega_den = omega_num + np.sum(resid_vars)
+            omega = omega_num / omega_den if omega_den > 0 else np.nan
+
+            # Cronbach's alpha from model-implied covariance
+            k = len(indicators)
+            idx = np.array(obs_indices)
+            Sigma_f = sigma[np.ix_(idx, idx)]
+            sum_all = np.sum(Sigma_f)
+            sum_diag = np.sum(np.diag(Sigma_f))
+            alpha = (k / (k - 1)) * (1 - sum_diag / sum_all) if sum_all > 0 else np.nan
+
+            result[lv] = {"omega": omega, "alpha": alpha}
+
+        return result
+
+    def factor_scores(self, data: pd.DataFrame, method: str = "regression") -> pd.DataFrame:
+        """Predict latent variable scores for each observation.
+
+        Parameters
+        ----------
+        data : pd.DataFrame
+            Data with observed variables.
+        method : str
+            ``"regression"`` (Thurstone/Thomson) or ``"bartlett"``.
+
+        Returns
+        -------
+        pd.DataFrame
+            One column per latent variable.
+        """
+        A_opt, S_opt = self._spec.unpack(self._theta)
+        sigma = _model_implied_cov(A_opt, S_opt, self._spec.F)
+        if sigma is None:
+            raise RuntimeError("Cannot compute factor scores: model-implied covariance is invalid.")
+
+        obs_data = data[self._spec.observed_vars].values
+        sigma_inv = np.linalg.inv(sigma)
+
+        # Full implied covariance
+        n = self._spec.n_vars
+        I_mat = np.eye(n)
+        IminA_inv = np.linalg.inv(I_mat - A_opt)
+        full_cov = IminA_inv @ S_opt @ IminA_inv.T
+
+        # Covariance between latent and observed: C_eta_y = full_cov[latent, :] @ F'
+        latent_indices = [self._spec._idx(lv) for lv in self._spec.latent_vars]
+        obs_indices = list(range(self._spec.n_obs))
+
+        # C(eta, y) = full_cov[latent_idx, :][:, obs_idx_in_full]
+        # where obs_idx_in_full = observed variable indices in all_vars
+        obs_in_all = [self._spec._idx(v) for v in self._spec.observed_vars]
+        C_eta_y = full_cov[np.ix_(latent_indices, obs_in_all)]
+
+        if method == "regression":
+            # Regression scores: eta_hat = C_eta_y @ Sigma^{-1} @ (y - mu)'
+            W = C_eta_y @ sigma_inv
+
+            # Center data
+            if self._spec.meanstructure and self._est.sample_mean is not None:
+                centered = obs_data - self._est.sample_mean
+            else:
+                centered = obs_data - obs_data.mean(axis=0)
+
+            scores = centered @ W.T
+
+        elif method == "bartlett":
+            # Bartlett scores: weighted by inverse residual variance
+            # Lambda = loading matrix (obs x latent)
+            n_obs = self._spec.n_obs
+            n_lat = self._spec.n_latent
+            Lambda = np.zeros((n_obs, n_lat))
+            for i, ov in enumerate(self._spec.observed_vars):
+                ov_idx = self._spec._idx(ov)
+                for j, lv in enumerate(self._spec.latent_vars):
+                    lv_idx = self._spec._idx(lv)
+                    Lambda[i, j] = A_opt[ov_idx, lv_idx]
+
+            # Theta = diagonal residual covariance
+            Theta_inv = np.diag([1.0 / max(S_opt[self._spec._idx(v), self._spec._idx(v)], 1e-10)
+                                 for v in self._spec.observed_vars])
+
+            # Bartlett: (Lambda' Theta^{-1} Lambda)^{-1} Lambda' Theta^{-1} (y - mu)
+            LtTinv = Lambda.T @ Theta_inv
+            W = np.linalg.solve(LtTinv @ Lambda, LtTinv)
+
+            if self._spec.meanstructure and self._est.sample_mean is not None:
+                centered = obs_data - self._est.sample_mean
+            else:
+                centered = obs_data - obs_data.mean(axis=0)
+
+            scores = centered @ W.T
+        else:
+            raise ValueError(f"method must be 'regression' or 'bartlett', got '{method}'")
+
+        return pd.DataFrame(scores, columns=self._spec.latent_vars, index=data.index)
+
     def estimates(self) -> pd.DataFrame:
         """Return parameter estimates as a DataFrame."""
         params = self._spec.params

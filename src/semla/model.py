@@ -198,6 +198,24 @@ class Model:
         """Return R-squared for endogenous variables."""
         return self.results.r_squared()
 
+    def reliability(self) -> dict:
+        """Return reliability (omega, alpha) for each factor."""
+        return self.results.reliability()
+
+    def predict(self, data: pd.DataFrame = None, method: str = "regression") -> pd.DataFrame:
+        """Predict factor scores.
+
+        Parameters
+        ----------
+        data : pd.DataFrame, optional
+            Data to predict on. Defaults to the training data.
+        method : str
+            ``"regression"`` or ``"bartlett"``.
+        """
+        if data is None:
+            data = self.data
+        return self.results.factor_scores(data, method=method)
+
     def standardized_estimates(self, type: str = "std.all") -> pd.DataFrame:
         """Return standardized parameter estimates.
 

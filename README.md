@@ -245,6 +245,8 @@ df = HolzingerSwineford1939()
 | `cfa(model, data, ordered=TRUE)` | `cfa(model, data, estimator="DWLS")` |
 | `summary(fit, rsquare=TRUE)` | `fit.r_squared()` |
 | `parameterEstimates(fit)` (with `:=`) | `fit.defined_estimates()` |
+| `lavPredict(fit)` | `fit.predict()` |
+| `reliability(fit)` | `fit.reliability()` |
 
 ## Dependencies
 
@@ -266,13 +268,13 @@ df = HolzingerSwineford1939()
 - [x] Mean structure and intercepts (~1)
 - [x] Equality constraints via parameter labels (a*x1 + a*x2)
 - [x] Indirect effects and mediation (:= operator with delta method SEs)
+- [x] Reliability measures — McDonald's omega and Cronbach's alpha
+- [x] Factor score prediction (regression and Bartlett methods)
 - [x] Input validation and Heywood case warnings
 
 **Future:**
 - [ ] FIML for missing data ([#15](https://github.com/amospagin/semla/issues/15))
 - [ ] Robust ML estimator (MLR) ([#12](https://github.com/amospagin/semla/issues/12))
-- [ ] Factor score prediction ([#16](https://github.com/amospagin/semla/issues/16))
-- [ ] Reliability measures — omega, alpha ([#17](https://github.com/amospagin/semla/issues/17))
 - [ ] Bootstrap confidence intervals ([#11](https://github.com/amospagin/semla/issues/11))
 
 ## License
