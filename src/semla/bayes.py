@@ -330,9 +330,20 @@ def run_mcmc(
     BayesianResults
         Full Bayesian results container with draws, diagnostics, and summaries.
     """
+    import os
     import warnings
-    import jax
     from .bayes_results import BayesianResults
+
+    # Enable parallel chains on CPU before JAX initializes.
+    # The XLA flag must be set before the JAX backend starts; once set
+    # it persists for the process lifetime (harmless if already set).
+    if num_chains > 1:
+        cur = os.environ.get("XLA_FLAGS", "")
+        flag = f"--xla_force_host_platform_device_count={num_chains}"
+        if "xla_force_host_platform_device_count" not in cur:
+            os.environ["XLA_FLAGS"] = f"{cur} {flag}".strip()
+
+    import jax
 
     jnp = _import_jax()
     numpyro = _import_numpyro()
