@@ -176,7 +176,58 @@ class Model:
         return self.results.converged
 
 
-def cfa(model: str, data: pd.DataFrame, **kwargs) -> Model:
+class MultiGroupModel:
+    """A multi-group Structural Equation Model.
+
+    Parameters
+    ----------
+    syntax : str
+        Model specification in lavaan syntax.
+    data : pd.DataFrame
+        Data with a grouping column.
+    group : str
+        Column name defining groups.
+    invariance : str
+        ``"configural"`` or ``"metric"``.
+    """
+
+    def __init__(self, syntax: str, data: pd.DataFrame, group: str,
+                 invariance: str = "configural", **kwargs):
+        from .multigroup import build_multigroup_spec, estimate_multigroup
+        from .multigroup_results import MultiGroupResults
+
+        self.syntax_str = syntax
+        self.data = data
+        self.group_col = group
+        self.invariance = invariance
+
+        tokens = parse_syntax(syntax)
+        _validate_syntax(tokens)
+
+        auto_cov_latent = kwargs.get("auto_cov_latent", True)
+        self.mg_spec = build_multigroup_spec(
+            tokens, data, group, invariance=invariance,
+            auto_cov_latent=auto_cov_latent,
+        )
+
+        est_result = estimate_multigroup(self.mg_spec)
+        self.results = MultiGroupResults(est_result)
+
+    def summary(self) -> str:
+        return self.results.summary()
+
+    def fit_indices(self) -> dict:
+        return self.results.fit_indices()
+
+    def estimates(self) -> pd.DataFrame:
+        return self.results.estimates()
+
+    @property
+    def converged(self) -> bool:
+        return self.results.converged
+
+
+def cfa(model: str, data: pd.DataFrame, group: str = None, **kwargs):
     """Fit a Confirmatory Factor Analysis model.
 
     Convenience function matching lavaan::cfa(). Automatically adds
@@ -188,17 +239,21 @@ def cfa(model: str, data: pd.DataFrame, **kwargs) -> Model:
         Model syntax in lavaan format.
     data : pd.DataFrame
         Data with columns matching observed variables.
+    group : str, optional
+        Column name for multi-group analysis.
 
     Returns
     -------
-    Model
+    Model or MultiGroupModel
         Fitted model object.
     """
     kwargs.setdefault("auto_cov_latent", True)
+    if group is not None:
+        return MultiGroupModel(model, data, group=group, **kwargs)
     return Model(model, data, **kwargs)
 
 
-def sem(model: str, data: pd.DataFrame, **kwargs) -> Model:
+def sem(model: str, data: pd.DataFrame, group: str = None, **kwargs):
     """Fit a Structural Equation Model.
 
     Convenience function matching lavaan::sem(). Does NOT auto-add
@@ -210,11 +265,15 @@ def sem(model: str, data: pd.DataFrame, **kwargs) -> Model:
         Model syntax in lavaan format.
     data : pd.DataFrame
         Data with columns matching observed variables.
+    group : str, optional
+        Column name for multi-group analysis.
 
     Returns
     -------
-    Model
+    Model or MultiGroupModel
         Fitted model object.
     """
     kwargs.setdefault("auto_cov_latent", False)
+    if group is not None:
+        return MultiGroupModel(model, data, group=group, **kwargs)
     return Model(model, data, **kwargs)
