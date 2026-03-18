@@ -349,6 +349,135 @@ class ModelResults:
         df["est.std"] = std_est
         return df
 
+    def modindices(self, min_mi: float = 0.0, sort: bool = True) -> pd.DataFrame:
+        """Compute modification indices for fixed parameters.
+
+        A modification index (MI) approximates the expected drop in
+        chi-square (df=1) if a currently fixed-to-zero parameter were freed.
+        Uses the univariate score (Lagrange multiplier) test:
+
+            MI = (N-1) * g_r^2 / J_rr
+
+        where g_r = dF_ML/dtheta_r and J_rr = 0.5*tr(Sigma^{-1} dSigma_r Sigma^{-1} dSigma_r).
+
+        Parameters
+        ----------
+        min_mi : float
+            Only return parameters with MI >= this value.
+        sort : bool
+            Sort by MI descending.
+
+        Returns
+        -------
+        pd.DataFrame
+            Columns: lhs, op, rhs, mi, epc (expected parameter change).
+        """
+        A_opt, S_opt = self._spec.unpack(self._theta)
+        n = self._spec.n_vars
+        N = self._n_obs
+
+        # Model-implied covariance
+        sigma = _model_implied_cov(A_opt, S_opt, self._spec.F)
+        sigma_inv = np.linalg.inv(sigma)
+
+        # W matrix for score: dF/dtheta = tr(W @ dSigma)
+        W = sigma_inv - sigma_inv @ self._sample_cov @ sigma_inv
+
+        eps = 1e-7
+        rows = []
+
+        def _compute_mi(dSigma_r, symmetric=False):
+            """Compute MI for a candidate fixed parameter."""
+            # g_r = dF_ML/dtheta_r
+            g_r = np.trace(W @ dSigma_r)
+
+            # J_rr = expected information element
+            # For symmetric (S) off-diagonal params, use 0.5*tr (parameter appears twice)
+            # For asymmetric (A) params, use tr (parameter appears once)
+            SinvdS = sigma_inv @ dSigma_r
+            J_rr = np.trace(SinvdS @ SinvdS)
+            if symmetric:
+                J_rr *= 0.5
+
+            if J_rr > 1e-15:
+                mi = (N - 1) * g_r ** 2 / J_rr
+                epc = g_r / J_rr
+            else:
+                mi = 0.0
+                epc = 0.0
+            return mi, epc
+
+        # --- Check all zero-fixed cells in A (loadings/regressions) ---
+        for i in range(n):
+            for j in range(n):
+                if i == j:
+                    continue
+                if self._spec.A_free[i, j] or A_opt[i, j] != 0.0:
+                    continue
+
+                var_i = self._spec.all_vars[i]
+                var_j = self._spec.all_vars[j]
+
+                if var_j in self._spec.latent_vars and var_i not in self._spec.latent_vars:
+                    op, lhs, rhs = "=~", var_j, var_i
+                elif var_j in self._spec.latent_vars and var_i in self._spec.latent_vars:
+                    op, lhs, rhs = "~", var_i, var_j
+                else:
+                    op, lhs, rhs = "~", var_i, var_j
+
+                A_plus = A_opt.copy()
+                A_plus[i, j] = eps
+                sig_plus = _model_implied_cov(A_plus, S_opt, self._spec.F)
+                A_minus = A_opt.copy()
+                A_minus[i, j] = -eps
+                sig_minus = _model_implied_cov(A_minus, S_opt, self._spec.F)
+                if sig_plus is None or sig_minus is None:
+                    continue
+
+                dSigma_r = (sig_plus - sig_minus) / (2 * eps)
+                mi, epc = _compute_mi(dSigma_r)
+
+                if mi >= min_mi:
+                    rows.append({"lhs": lhs, "op": op, "rhs": rhs, "mi": mi, "epc": epc})
+
+        # --- Check all zero-fixed cells in S (covariances) ---
+        # Only between observed variables (residual covariances)
+        obs_set = set(self._spec.observed_vars)
+        for i in range(n):
+            for j in range(i + 1):
+                if self._spec.S_free[i, j] or S_opt[i, j] != 0.0:
+                    continue
+
+                var_i = self._spec.all_vars[i]
+                var_j = self._spec.all_vars[j]
+
+                # Skip latent-observed and latent-latent covariances
+                if var_i not in obs_set or var_j not in obs_set:
+                    continue
+
+                S_plus = S_opt.copy()
+                S_plus[i, j] += eps
+                S_plus[j, i] += eps
+                sig_plus = _model_implied_cov(A_opt, S_plus, self._spec.F)
+                S_minus = S_opt.copy()
+                S_minus[i, j] -= eps
+                S_minus[j, i] -= eps
+                sig_minus = _model_implied_cov(A_opt, S_minus, self._spec.F)
+                if sig_plus is None or sig_minus is None:
+                    continue
+
+                dSigma_r = (sig_plus - sig_minus) / (2 * eps)
+                is_offdiag = (i != j)
+                mi, epc = _compute_mi(dSigma_r, symmetric=is_offdiag)
+
+                if mi >= min_mi:
+                    rows.append({"lhs": var_i, "op": "~~", "rhs": var_j, "mi": mi, "epc": epc})
+
+        df = pd.DataFrame(rows, columns=["lhs", "op", "rhs", "mi", "epc"])
+        if sort and len(df) > 0:
+            df = df.sort_values("mi", ascending=False).reset_index(drop=True)
+        return df
+
     def summary(self) -> str:
         """Generate a lavaan-style summary string."""
         lines = []

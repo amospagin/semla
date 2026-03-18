@@ -148,6 +148,18 @@ class Model:
         """Return parameter estimates as a DataFrame."""
         return self.results.estimates()
 
+    def modindices(self, min_mi: float = 0.0, sort: bool = True) -> pd.DataFrame:
+        """Return modification indices for fixed parameters.
+
+        Parameters
+        ----------
+        min_mi : float
+            Only return parameters with MI >= this value.
+        sort : bool
+            Sort by MI descending.
+        """
+        return self.results.modindices(min_mi=min_mi, sort=sort)
+
     def standardized_estimates(self, type: str = "std.all") -> pd.DataFrame:
         """Return standardized parameter estimates.
 
