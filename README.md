@@ -127,8 +127,8 @@ semla uses the same operators as lavaan:
 # Fix a loading to a specific value
 "f1 =~ 1*x1 + x2 + x3"
 
-# Label parameters
-"f1 =~ a*x1 + b*x2 + c*x3"
+# Equality constraints — same label = forced equal
+"f1 =~ x1 + a*x2 + a*x3"  # x2 and x3 loadings constrained equal
 
 # Free a normally-fixed parameter
 "f1 =~ NA*x1 + x2 + x3"
@@ -193,6 +193,8 @@ fit.summary()
 | TLI | Tucker-Lewis Index | > .95 |
 | RMSEA | Root Mean Square Error of Approximation | < .06 |
 | SRMR | Standardized Root Mean Square Residual | < .08 |
+| AIC | Akaike Information Criterion | Lower is better |
+| BIC | Bayesian Information Criterion | Lower is better |
 
 ## Built-in Datasets
 
@@ -223,6 +225,7 @@ df = HolzingerSwineford1939()
 | `modindices(fit)` | `fit.modindices()` |
 | `cfa(model, data, group="x")` | `cfa(model, data, group="x")` |
 | `cfa(model, data, ordered=TRUE)` | `cfa(model, data, estimator="DWLS")` |
+| `summary(fit, rsquare=TRUE)` | `fit.r_squared()` |
 
 ## Dependencies
 
