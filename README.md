@@ -27,8 +27,8 @@ pip install semla
 Or install from source:
 
 ```bash
-git clone https://github.com/amospagin/Py-semla.git
-cd Py-semla
+git clone https://github.com/amospagin/semla.git
+cd semla
 pip install -e .
 ```
 
