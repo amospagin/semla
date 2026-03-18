@@ -53,6 +53,11 @@ class ModelSpecification:
     m_values: np.ndarray = field(default=None)  # starting/fixed values (n_vars,)
     meanstructure: bool = False
 
+    # Equality constraints: maps raw free param index -> effective theta index
+    # When None, no constraints (1:1 mapping). When set, same-labeled
+    # params map to the same effective index.
+    _constraint_map: np.ndarray = field(default=None)
+
     @property
     def n_obs(self) -> int:
         return len(self.observed_vars)
@@ -71,11 +76,19 @@ class ModelSpecification:
         return np.tril(self.S_free)
 
     @property
-    def n_free(self) -> int:
+    def _n_free_raw(self) -> int:
+        """Number of free parameters before applying equality constraints."""
         count = int(np.sum(self.A_free) + np.sum(self._S_free_lower))
         if self.meanstructure and self.m_free is not None:
             count += int(np.sum(self.m_free))
         return count
+
+    @property
+    def n_free(self) -> int:
+        """Number of unique free parameters (after equality constraints)."""
+        if self._constraint_map is not None:
+            return int(self._constraint_map.max()) + 1
+        return self._n_free_raw
 
     def _idx(self, var: str) -> int:
         return self.all_vars.index(var)
@@ -87,13 +100,39 @@ class ModelSpecification:
         parts = [a_vals, s_vals]
         if self.meanstructure and self.m_free is not None:
             parts.append(self.m_values[self.m_free])
-        return np.concatenate(parts)
+        raw = np.concatenate(parts)
+
+        if self._constraint_map is not None:
+            # Collapse to effective theta (take first value per group)
+            n_eff = int(self._constraint_map.max()) + 1
+            theta = np.zeros(n_eff)
+            for i in range(len(raw)):
+                eff_idx = self._constraint_map[i]
+                theta[eff_idx] = raw[i]  # last write wins (all same-label have same start)
+            return theta
+        return raw
+
+    def _expand_theta(self, theta_effective: np.ndarray) -> np.ndarray:
+        """Expand effective (constrained) theta to raw theta."""
+        if self._constraint_map is not None:
+            return theta_effective[self._constraint_map]
+        return theta_effective
 
     def param_theta_index(self, p: "ParamInfo") -> int | None:
-        """Return the index in the theta vector for a given free parameter.
+        """Return the index in the effective theta vector for a given free parameter.
 
+        Accounts for equality constraints.
         Returns None if the parameter is fixed.
         """
+        raw_idx = self._param_raw_theta_index(p)
+        if raw_idx is None:
+            return None
+        if self._constraint_map is not None:
+            return int(self._constraint_map[raw_idx])
+        return raw_idx
+
+    def _param_raw_theta_index(self, p: "ParamInfo") -> int | None:
+        """Return the raw (pre-constraint) theta index."""
         if not p.free:
             return None
 
@@ -150,12 +189,13 @@ class ModelSpecification:
 
     def unpack(self, theta: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Unpack a 1-D parameter vector into A and S matrices."""
+        raw = self._expand_theta(theta)
         n_a = int(np.sum(self.A_free))
         n_s = int(np.sum(self._S_free_lower))
         A = self.A_values.copy()
         S = self.S_values.copy()
-        A[self.A_free] = theta[:n_a]
-        S[self._S_free_lower] = theta[n_a:n_a + n_s]
+        A[self.A_free] = raw[:n_a]
+        S[self._S_free_lower] = raw[n_a:n_a + n_s]
         # Mirror to upper triangle for symmetry
         S = np.tril(S) + np.tril(S, -1).T
         return A, S
@@ -165,11 +205,12 @@ class ModelSpecification:
 
         Only meaningful when meanstructure=True.
         """
+        raw = self._expand_theta(theta)
         n_a = int(np.sum(self.A_free))
         n_s = int(np.sum(self._S_free_lower))
         m = self.m_values.copy()
         if self.m_free is not None:
-            m[self.m_free] = theta[n_a + n_s:]
+            m[self.m_free] = raw[n_a + n_s:]
         return m
 
 
@@ -377,5 +418,55 @@ def build_specification(
         spec.meanstructure = True
 
     spec.params = params
+
+    # --- Equality constraints from labels ---
+    # Find free params with the same label and create a constraint map
+    labeled_params = [(i, p) for i, p in enumerate(params) if p.free and p.label]
+    label_groups: dict[str, list[int]] = {}
+    for i, p in labeled_params:
+        label_groups.setdefault(p.label, []).append(i)
+
+    # Only create constraint map if there are actual shared labels
+    has_constraints = any(len(indices) > 1 for indices in label_groups.values())
+    if has_constraints:
+        # Build raw theta index for each free param
+        free_params = [(i, p) for i, p in enumerate(params) if p.free]
+        raw_indices = {}
+        for raw_idx, (param_idx, p) in enumerate(free_params):
+            raw_indices[param_idx] = raw_idx
+
+        n_raw = len(free_params)
+        constraint_map = np.arange(n_raw, dtype=int)  # default: identity
+
+        # For each label group, map all to the same effective index
+        effective_idx = 0
+        assigned = np.full(n_raw, -1, dtype=int)
+
+        # First pass: assign effective indices
+        for raw_idx in range(n_raw):
+            if assigned[raw_idx] >= 0:
+                continue
+            param_idx = free_params[raw_idx][0]
+            p = free_params[raw_idx][1]
+
+            assigned[raw_idx] = effective_idx
+
+            # If this param has a label, find all others with same label
+            if p.label and p.label in label_groups:
+                for other_param_idx in label_groups[p.label]:
+                    if other_param_idx in raw_indices:
+                        other_raw = raw_indices[other_param_idx]
+                        if assigned[other_raw] < 0:
+                            assigned[other_raw] = effective_idx
+
+            effective_idx += 1
+
+        # Handle any unassigned (shouldn't happen but be safe)
+        for raw_idx in range(n_raw):
+            if assigned[raw_idx] < 0:
+                assigned[raw_idx] = effective_idx
+                effective_idx += 1
+
+        spec._constraint_map = assigned
 
     return spec
