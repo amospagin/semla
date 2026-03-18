@@ -181,7 +181,13 @@ class BayesianResults:
         I = jnp.eye(spec.n_vars)
         A_fixed = jnp.array(spec.A_values)
         S_fixed = jnp.array(spec.S_values)
-        obs_data = jnp.array(self._data)
+        # Center data when no mean structure (matches build_numpyro_model)
+        if spec.meanstructure and spec.m_values is not None:
+            obs_data = jnp.array(self._data)
+        else:
+            obs_data = jnp.array(
+                self._data - np.nanmean(self._data, axis=0, keepdims=True)
+            )
 
         m_fixed = None
         if spec.meanstructure and spec.m_values is not None:

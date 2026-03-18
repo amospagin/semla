@@ -120,12 +120,12 @@ def _adaptive_prior(
 # ── weak informative preset ────────────────────────────────────────────
 
 _WEAK_DEFAULTS: dict[str, Prior] = {
-    "loadings": Normal(mu=0.0, sigma=10.0),
-    "regressions": Normal(mu=0.0, sigma=10.0),
-    "residual_variances": InverseGamma(concentration=0.01, rate=0.01),
-    "factor_variances": InverseGamma(concentration=0.01, rate=0.01),
-    "covariances": Normal(mu=0.0, sigma=100.0),
-    "intercepts": Normal(mu=0.0, sigma=100.0),
+    "loadings": Normal(mu=0.0, sigma=5.0),
+    "regressions": Normal(mu=0.0, sigma=5.0),
+    "residual_variances": InverseGamma(concentration=2.0, rate=1.0),
+    "factor_variances": InverseGamma(concentration=2.0, rate=1.0),
+    "covariances": Normal(mu=0.0, sigma=10.0),
+    "intercepts": Normal(mu=0.0, sigma=20.0),
 }
 
 

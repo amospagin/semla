@@ -195,11 +195,14 @@ def build_numpyro_model(
     S_fixed = jnp.array(spec.S_values)
     F = jnp.array(spec.F)
     I = jnp.eye(spec.n_vars)
-    obs_data = jnp.array(data)
 
+    # Center data when no mean structure (ML also uses centered covariance)
     m_fixed = None
     if spec.meanstructure and spec.m_values is not None:
         m_fixed = jnp.array(spec.m_values)
+        obs_data = jnp.array(data)
+    else:
+        obs_data = jnp.array(data - np.nanmean(data, axis=0, keepdims=True))
 
     # Group params by effective index (for equality constraints)
     # eff_idx -> list of (matrix, row, col) placements

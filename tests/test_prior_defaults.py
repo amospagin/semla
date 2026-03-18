@@ -158,14 +158,14 @@ class TestWeakPriors:
         result = resolve_priors(spec, data, priors="weak")
         p = result.get("f1=~x2")
         assert isinstance(p, Normal)
-        assert p.sigma == 10.0
+        assert p.sigma == 5.0
 
-    def test_variance_is_wide_inverse_gamma(self, cfa_spec_and_data):
+    def test_variance_is_inverse_gamma(self, cfa_spec_and_data):
         spec, data = cfa_spec_and_data
         result = resolve_priors(spec, data, priors="weak")
         p = result.get("x1~~x1")
         assert isinstance(p, InverseGamma)
-        assert p.concentration == 0.01
+        assert p.concentration == 2.0
 
     def test_unknown_preset_raises(self, cfa_spec_and_data):
         spec, data = cfa_spec_and_data
