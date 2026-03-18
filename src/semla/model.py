@@ -202,6 +202,103 @@ class Model:
         """Return reliability (omega, alpha) for each factor."""
         return self.results.reliability()
 
+    def bootstrap(self, nboot: int = 1000, seed: int = None) -> pd.DataFrame:
+        """Bootstrap confidence intervals for all parameters.
+
+        Resamples data with replacement, refits the model, and returns
+        the distribution of parameter estimates.
+
+        Parameters
+        ----------
+        nboot : int
+            Number of bootstrap replications.
+        seed : int, optional
+            Random seed for reproducibility.
+
+        Returns
+        -------
+        pd.DataFrame
+            Columns: lhs, op, rhs, est, se_boot, ci_lower, ci_upper, pvalue_boot.
+        """
+        import warnings as _warnings
+        rng = np.random.default_rng(seed)
+        n = len(self.data)
+
+        # Original estimates as reference
+        orig_est = self.estimates()
+        orig_est = orig_est[orig_est["free"]].copy()
+        n_params = len(orig_est)
+
+        # Collect bootstrap estimates
+        boot_matrix = np.full((nboot, n_params), np.nan)
+        model_tokens = [tok for tok in self.tokens if tok.op != ":="]
+
+        for b in range(nboot):
+            idx = rng.integers(0, n, size=n)
+            boot_data = self.data.iloc[idx].reset_index(drop=True)
+
+            try:
+                with _warnings.catch_warnings():
+                    _warnings.simplefilter("ignore")
+                    boot_spec = build_specification(
+                        model_tokens,
+                        boot_data.columns.tolist(),
+                        auto_cov_latent=self.spec.meanstructure or True,
+                        meanstructure=self.spec.meanstructure,
+                    )
+                    # Copy constraint map if present
+                    boot_spec._constraint_map = self.spec._constraint_map
+
+                    # Set starting values from original solution
+                    boot_spec.A_values = self.spec.A_values.copy()
+                    boot_spec.S_values = self.spec.S_values.copy()
+                    if self.spec.meanstructure:
+                        boot_spec.m_values = self.spec.m_values.copy()
+
+                    boot_result = estimate(boot_spec, boot_data)
+                    if boot_result.converged:
+                        # Extract free parameter values in the same order
+                        boot_est_df = ModelResults(boot_result).estimates()
+                        boot_free = boot_est_df[boot_est_df["free"]]
+                        if len(boot_free) == n_params:
+                            boot_matrix[b, :] = boot_free["est"].values
+            except Exception:
+                continue
+
+        # Compute bootstrap statistics
+        valid = ~np.all(np.isnan(boot_matrix), axis=1)
+        n_valid = valid.sum()
+
+        rows = []
+        for i, (_, row) in enumerate(orig_est.iterrows()):
+            boot_vals = boot_matrix[valid, i] if n_valid > 0 else np.array([])
+            boot_vals = boot_vals[~np.isnan(boot_vals)]
+
+            if len(boot_vals) > 10:
+                se_boot = np.std(boot_vals, ddof=1)
+                ci_lower = np.percentile(boot_vals, 2.5)
+                ci_upper = np.percentile(boot_vals, 97.5)
+                # Bootstrap p-value (proportion of samples crossing zero)
+                if row["est"] > 0:
+                    p_boot = 2 * np.mean(boot_vals <= 0)
+                else:
+                    p_boot = 2 * np.mean(boot_vals >= 0)
+                p_boot = min(p_boot, 1.0)
+            else:
+                se_boot = ci_lower = ci_upper = p_boot = np.nan
+
+            rows.append({
+                "lhs": row["lhs"], "op": row["op"], "rhs": row["rhs"],
+                "est": row["est"],
+                "se_boot": se_boot,
+                "ci.lower": ci_lower,
+                "ci.upper": ci_upper,
+                "pvalue_boot": p_boot,
+                "n_valid": len(boot_vals),
+            })
+
+        return pd.DataFrame(rows)
+
     def predict(self, data: pd.DataFrame = None, method: str = "regression") -> pd.DataFrame:
         """Predict factor scores.
 

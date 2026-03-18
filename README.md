@@ -247,6 +247,7 @@ df = HolzingerSwineford1939()
 | `parameterEstimates(fit)` (with `:=`) | `fit.defined_estimates()` |
 | `lavPredict(fit)` | `fit.predict()` |
 | `reliability(fit)` | `fit.reliability()` |
+| `bootstrapLavaan(fit)` | `fit.bootstrap(nboot=1000)` |
 
 ## Dependencies
 
@@ -270,12 +271,12 @@ df = HolzingerSwineford1939()
 - [x] Indirect effects and mediation (:= operator with delta method SEs)
 - [x] Reliability measures — McDonald's omega and Cronbach's alpha
 - [x] Factor score prediction (regression and Bartlett methods)
+- [x] Bootstrap confidence intervals
 - [x] Input validation and Heywood case warnings
 
 **Future:**
 - [ ] FIML for missing data ([#15](https://github.com/amospagin/semla/issues/15))
 - [ ] Robust ML estimator (MLR) ([#12](https://github.com/amospagin/semla/issues/12))
-- [ ] Bootstrap confidence intervals ([#11](https://github.com/amospagin/semla/issues/11))
 
 ## License
 
