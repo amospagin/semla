@@ -14,10 +14,10 @@ from semla.bayes import (
     build_numpyro_model,
     _build_param_table,
     run_mcmc,
-    MCMCResult,
     _effective_sample_size,
     _rhat,
 )
+from semla.bayes_results import BayesianResults
 
 
 # ── fixtures ────────────────────────────────────────────────────────────
@@ -213,7 +213,7 @@ class TestMCMCSmoke:
             seed=0,
             progress_bar=False,
         )
-        assert isinstance(result, MCMCResult)
+        assert isinstance(result, BayesianResults)
         assert len(result.samples) > 0
 
         df = result.summary()

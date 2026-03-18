@@ -171,6 +171,10 @@ class Model:
         # Estimate
         estimator = kwargs.get("estimator", "ML").upper()
 
+        if estimator == "BAYES":
+            self._fit_bayes(data, kwargs)
+            return
+
         if missing == "fiml":
             from .fiml import estimate_fiml
             # FIML requires mean structure
@@ -195,7 +199,8 @@ class Model:
             est_result = estimate_dwls(self.spec, data)
         else:
             raise ValueError(
-                f"Unknown estimator '{estimator}'. Use 'ML', 'MLR', or 'DWLS'."
+                f"Unknown estimator '{estimator}'. "
+                "Use 'ML', 'MLR', 'DWLS', or 'bayes'."
             )
 
         # Build results
@@ -203,6 +208,33 @@ class Model:
         from .defined import extract_defined_params
         self._defined_params = extract_defined_params(self.tokens)
         self.results = ModelResults(est_result, defined_params=self._defined_params)
+
+    def _fit_bayes(self, data: pd.DataFrame, kwargs: dict):
+        """Run Bayesian estimation via NumPyro MCMC."""
+        try:
+            from .bayes import run_mcmc
+        except ImportError:
+            raise ImportError(
+                "numpyro is required for estimator='bayes'. "
+                "Install it with:  pip install semla[bayes]"
+            ) from None
+
+        obs_vars = self.spec.observed_vars
+        data_array = data[obs_vars].values.astype(float)
+
+        bayes_kwargs = {
+            "priors": kwargs.get("priors", None),
+            "num_warmup": kwargs.get("warmup", kwargs.get("num_warmup", 1000)),
+            "num_samples": kwargs.get("draws", kwargs.get("num_samples", 1000)),
+            "num_chains": kwargs.get("chains", kwargs.get("num_chains", 4)),
+            "seed": kwargs.get("seed", 0),
+            "target_accept_prob": kwargs.get("adapt_delta",
+                                             kwargs.get("target_accept_prob", 0.8)),
+            "adapt_convergence": kwargs.get("adapt_convergence", True),
+            "progress_bar": kwargs.get("progress_bar", True),
+        }
+
+        self.results = run_mcmc(self.spec, data_array, **bayes_kwargs)
 
     def summary(self) -> str:
         """Print and return a lavaan-style summary."""

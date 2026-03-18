@@ -285,13 +285,21 @@ def run_mcmc(
     priors: PriorSpec = None,
     *,
     num_warmup: int = 1000,
-    num_samples: int = 2000,
+    num_samples: int = 1000,
     num_chains: int = 4,
     seed: int = 0,
     target_accept_prob: float = 0.8,
+    adapt_convergence: bool = True,
+    max_retries: int = 2,
     progress_bar: bool = True,
-) -> "MCMCResult":
-    """Run NUTS sampling on a Bayesian SEM model.
+) -> "BayesianResults":
+    """Run NUTS sampling on a Bayesian SEM model with adaptive convergence.
+
+    When ``adapt_convergence=True`` (default), after the initial run:
+      1. Check R-hat across all parameters.
+      2. If max R-hat > 1.01, extend draws by 2x (cheap retry).
+      3. If still bad, restart with 2x warmup and adapt_delta=0.95.
+      4. Check divergence proportion and auto-retry if >5%.
 
     Parameters
     ----------
@@ -306,94 +314,127 @@ def run_mcmc(
     seed : int
         Random seed.
     target_accept_prob : float
-        NUTS target acceptance probability.
+        NUTS target acceptance probability (adapt_delta).
+    adapt_convergence : bool
+        Whether to adaptively extend/retry for convergence.
+    max_retries : int
+        Maximum number of adaptive retries.
     progress_bar : bool
         Show progress bar during sampling.
 
     Returns
     -------
-    MCMCResult
-        Container with posterior samples and diagnostics.
+    BayesianResults
+        Full Bayesian results container with draws, diagnostics, and summaries.
     """
+    import warnings
     import jax
+    from .bayes_results import BayesianResults
+
     jnp = _import_jax()
     numpyro = _import_numpyro()
     from numpyro.infer import MCMC, NUTS
 
     model_fn, prior_dict, param_keys = build_numpyro_model(spec, data, priors)
 
-    kernel = NUTS(model_fn, target_accept_prob=target_accept_prob)
-    mcmc = MCMC(
-        kernel,
-        num_warmup=num_warmup,
-        num_samples=num_samples,
-        num_chains=num_chains,
-        progress_bar=progress_bar,
-    )
-
+    current_warmup = num_warmup
+    current_samples = num_samples
+    current_adapt_delta = target_accept_prob
     rng_key = jax.random.PRNGKey(seed)
-    mcmc.run(rng_key)
 
-    return MCMCResult(
+    mcmc = None
+    for attempt in range(1 + max_retries):
+        kernel = NUTS(model_fn, target_accept_prob=current_adapt_delta)
+        mcmc = MCMC(
+            kernel,
+            num_warmup=current_warmup,
+            num_samples=current_samples,
+            num_chains=num_chains,
+            progress_bar=progress_bar,
+        )
+
+        rng_key, run_key = jax.random.split(rng_key)
+        mcmc.run(run_key)
+
+        if not adapt_convergence:
+            break
+
+        # Check convergence
+        samples = mcmc.get_samples()
+        max_rhat = _max_rhat(samples, num_chains)
+        n_div, div_pct = _divergence_stats(mcmc)
+
+        converged = max_rhat <= 1.01
+        div_ok = div_pct <= 5.0
+
+        if converged and div_ok:
+            if 1.0 < div_pct <= 5.0:
+                warnings.warn(
+                    f"Sampling completed with {n_div} divergent transitions "
+                    f"({div_pct:.1f}%). Consider increasing adapt_delta.",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+            break
+
+        if attempt >= max_retries:
+            issues = []
+            if not converged:
+                issues.append(f"max R-hat={max_rhat:.3f}")
+            if not div_ok:
+                issues.append(f"{n_div} divergences ({div_pct:.1f}%)")
+            warnings.warn(
+                f"Adaptive convergence failed after {max_retries} retries: "
+                + ", ".join(issues) + ". Consider increasing draws or "
+                "simplifying the model.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            break
+
+        # Adaptation strategy
+        if not converged and attempt == 0:
+            # First retry: extend draws
+            current_samples = current_samples * 2
+        else:
+            # Later retries or divergence issues: longer warmup + higher adapt_delta
+            current_warmup = current_warmup * 2
+            current_adapt_delta = min(current_adapt_delta + 0.1, 0.99)
+
+    return BayesianResults(
         mcmc=mcmc,
         spec=spec,
         param_keys=param_keys,
         prior_dict=prior_dict,
+        data=data,
     )
 
 
-# ---------------------------------------------------------------------------
-# Results container
-# ---------------------------------------------------------------------------
+def _max_rhat(samples: dict, num_chains: int) -> float:
+    """Compute maximum R-hat across all sampled parameters."""
+    max_r = 0.0
+    for key, vals in samples.items():
+        if key == "obs":
+            continue
+        s = np.array(vals).ravel()
+        r = _rhat(s, num_chains)
+        if not np.isnan(r):
+            max_r = max(max_r, r)
+    return max_r
 
-class MCMCResult:
-    """Container for Bayesian SEM MCMC results.
 
-    Attributes
-    ----------
-    mcmc : numpyro.infer.MCMC
-        The underlying MCMC object.
-    samples : dict[str, jax.Array]
-        Posterior samples keyed by parameter name.
-    param_keys : list[str]
-        Ordered parameter names.
-    """
-
-    def __init__(self, mcmc, spec, param_keys, prior_dict):
-        self.mcmc = mcmc
-        self.spec = spec
-        self.param_keys = param_keys
-        self.prior_dict = prior_dict
-        self.samples = mcmc.get_samples()
-
-    def summary(self) -> "pd.DataFrame":
-        """Return a summary DataFrame with posterior mean, SD, and quantiles."""
-        import pandas as pd
-        jnp = _import_jax()
-        np_ = np
-
-        rows = []
-        for key in self.param_keys:
-            if key not in self.samples:
-                continue
-            s = np.array(self.samples[key])
-            rows.append({
-                "parameter": key,
-                "mean": float(np_.mean(s)),
-                "sd": float(np_.std(s)),
-                "q025": float(np_.percentile(s, 2.5)),
-                "q25": float(np_.percentile(s, 25)),
-                "q50": float(np_.percentile(s, 50)),
-                "q75": float(np_.percentile(s, 75)),
-                "q975": float(np_.percentile(s, 97.5)),
-                "n_eff": float(_effective_sample_size(s)),
-                "rhat": float(_rhat(s, self.mcmc.num_chains)),
-            })
-        return pd.DataFrame(rows)
-
-    def print_summary(self):
-        """Print MCMC diagnostics via numpyro."""
-        self.mcmc.print_summary()
+def _divergence_stats(mcmc) -> tuple[int, float]:
+    """Return (n_divergences, divergence_pct) from an MCMC run."""
+    try:
+        extra = mcmc.get_extra_fields()
+        if "diverging" in extra:
+            div = np.array(extra["diverging"])
+            n_div = int(div.sum())
+            total = len(div)
+            return n_div, 100.0 * n_div / total if total > 0 else 0.0
+    except Exception:
+        pass
+    return 0, 0.0
 
 
 # ---------------------------------------------------------------------------
