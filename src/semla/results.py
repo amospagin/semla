@@ -133,6 +133,14 @@ class ModelResults:
         # SRMR
         self.srmr = self._compute_srmr()
 
+        # Information criteria
+        # AIC = chi_square + 2*k, BIC = chi_square + k*log(n)
+        k = self._spec.n_free
+        self.aic = self.chi_square + 2 * k
+        self.bic = self.chi_square + k * np.log(n)
+        # Sample-size adjusted BIC (Sclove 1987)
+        self.abic = self.chi_square + k * np.log((n + 2) / 24)
+
     def _fit_null_model(self) -> tuple[float, int]:
         """Fit the independence (null) model: only variances, no covariances."""
         p = self._spec.n_obs
@@ -230,7 +238,43 @@ class ModelResults:
             "rmsea_ci_lower": self.rmsea_ci[0],
             "rmsea_ci_upper": self.rmsea_ci[1],
             "srmr": self.srmr,
+            "aic": self.aic,
+            "bic": self.bic,
+            "abic": self.abic,
         }
+
+    def r_squared(self) -> dict:
+        """Compute R-squared for endogenous variables.
+
+        R² = 1 - (residual variance / total implied variance)
+
+        Returns
+        -------
+        dict
+            Variable name -> R² value for each endogenous variable.
+        """
+        A_opt, S_opt = self._spec.unpack(self._theta)
+
+        # Total implied covariance (all variables including latent)
+        n = self._spec.n_vars
+        I_mat = np.eye(n)
+        IminA_inv = np.linalg.inv(I_mat - A_opt)
+        total_cov = IminA_inv @ S_opt @ IminA_inv.T
+
+        result = {}
+        for p in self._spec.params:
+            if p.op == "~~" and p.lhs == p.rhs and p.free:
+                i = self._spec._idx(p.lhs)
+                total_var = total_cov[i, i]
+                resid_var = S_opt[i, i]
+                if total_var > 0:
+                    r2 = 1.0 - resid_var / total_var
+                    # Only report for endogenous variables (those with incoming paths)
+                    has_incoming = np.any(A_opt[i, :] != 0)
+                    if has_incoming:
+                        result[p.lhs] = max(r2, 0.0)
+
+        return result
 
     def estimates(self) -> pd.DataFrame:
         """Return parameter estimates as a DataFrame."""
@@ -526,6 +570,21 @@ class ModelResults:
         )
         lines.append(f"  SRMR                                     {self.srmr:>12.3f}")
         lines.append("")
+        lines.append("Information Criteria:")
+        lines.append("")
+        lines.append(f"  AIC                                      {self.aic:>12.3f}")
+        lines.append(f"  BIC                                      {self.bic:>12.3f}")
+        lines.append(f"  Adjusted BIC                             {self.abic:>12.3f}")
+        lines.append("")
+
+        # R-squared
+        r2 = self.r_squared()
+        if r2:
+            lines.append("R-Square:")
+            lines.append("")
+            for var, val in r2.items():
+                lines.append(f"  {var:<40s} {val:>12.3f}")
+            lines.append("")
 
         # Parameter estimates
         df = self.estimates()

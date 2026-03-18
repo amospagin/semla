@@ -169,6 +169,10 @@ class Model:
         """
         return self.results.modindices(min_mi=min_mi, sort=sort)
 
+    def r_squared(self) -> dict:
+        """Return R-squared for endogenous variables."""
+        return self.results.r_squared()
+
     def standardized_estimates(self, type: str = "std.all") -> pd.DataFrame:
         """Return standardized parameter estimates.
 
