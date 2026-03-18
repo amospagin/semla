@@ -1,3 +1,4 @@
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -7,16 +8,36 @@ build/
 *.egg
 .eggs/
 *.so
+
+# Virtual environments
 .venv/
 venv/
 env/
+
+# Secrets / env
 .env
+*.env.local
+
+# Testing / coverage
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Logs
 *.log
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Editors / IDEs
 .idea/
 .vscode/
 *.swp
 *.swo
+*~
+
+# AI tools
+.claude/
+.cursor/
+.copilot/

@@ -12,6 +12,8 @@
 
 ---
 
+> **Note:** semla is in early development (v0.1.0). The API may change, and results should be validated against established tools like lavaan before use in published research. Contributions and bug reports are welcome!
+
 **semla** brings the familiar [lavaan](https://lavaan.ugent.be/) model syntax from R to Python. If you know lavaan, you already know semla.
 
 Specify CFA and SEM models with the same `=~`, `~`, and `~~` operators — and get publication-ready fit indices, parameter estimates, and standard errors.
