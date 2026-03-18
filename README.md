@@ -274,6 +274,7 @@ df = HolzingerSwineford1939()
 - [x] Bootstrap confidence intervals
 - [x] Robust ML estimator (MLR) with Satorra-Bentler scaled chi-square
 - [x] FIML for missing data
+- [x] IRT models (1PL, 2PL, GRM) with ICC, information functions, and ability estimation
 - [x] Residual diagnostics and Mardia's multivariate normality test
 - [x] Input validation and Heywood case warnings
 
