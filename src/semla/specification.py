@@ -1,0 +1,254 @@
+"""Translate parsed syntax into RAM matrix specification for estimation.
+
+Uses the Reticular Action Model (RAM) notation:
+    A — asymmetric paths (directed: loadings, regressions)
+    S — symmetric paths (variances, covariances)
+    F — filter matrix (selects observed variables from full variable vector)
+
+Model-implied covariance:
+    Sigma = F @ (I - A)^{-1} @ S @ ((I - A)^{-1})^T @ F^T
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+import numpy as np
+import pandas as pd
+
+from .syntax import FormulaToken
+
+
+@dataclass
+class ParamInfo:
+    """Metadata for a single parameter in the model."""
+
+    lhs: str
+    op: str
+    rhs: str
+    free: bool
+    value: float  # starting value or fixed value
+    label: str | None = None
+
+
+@dataclass
+class ModelSpecification:
+    """RAM matrix specification built from parsed syntax tokens."""
+
+    observed_vars: list[str]
+    latent_vars: list[str]
+    all_vars: list[str]  # observed + latent
+
+    params: list[ParamInfo] = field(default_factory=list)
+
+    # RAM matrices (filled by build())
+    A_free: np.ndarray = field(default=None)  # bool mask: which cells are free
+    A_values: np.ndarray = field(default=None)  # starting/fixed values
+    S_free: np.ndarray = field(default=None)
+    S_values: np.ndarray = field(default=None)
+    F: np.ndarray = field(default=None)  # filter matrix
+
+    @property
+    def n_obs(self) -> int:
+        return len(self.observed_vars)
+
+    @property
+    def n_latent(self) -> int:
+        return len(self.latent_vars)
+
+    @property
+    def n_vars(self) -> int:
+        return len(self.all_vars)
+
+    @property
+    def n_free(self) -> int:
+        return int(np.sum(self.A_free) + np.sum(self.S_free))
+
+    def _idx(self, var: str) -> int:
+        return self.all_vars.index(var)
+
+    def pack_start(self) -> np.ndarray:
+        """Pack free parameter starting values into a 1-D vector."""
+        a_vals = self.A_values[self.A_free]
+        s_vals = self.S_values[self.S_free]
+        return np.concatenate([a_vals, s_vals])
+
+    def unpack(self, theta: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Unpack a 1-D parameter vector into A and S matrices."""
+        n_a = int(np.sum(self.A_free))
+        A = self.A_values.copy()
+        S = self.S_values.copy()
+        A[self.A_free] = theta[:n_a]
+        S[self.S_free] = theta[n_a:]
+        # S must be symmetric
+        S = (S + S.T) / 2
+        return A, S
+
+
+def build_specification(
+    tokens: list[FormulaToken],
+    observed_columns: list[str],
+    auto_var: bool = True,
+    auto_cov_latent: bool = True,
+    fixed_x: bool = False,
+) -> ModelSpecification:
+    """Build a RAM specification from parsed tokens and data column names.
+
+    Parameters
+    ----------
+    tokens : list[FormulaToken]
+        Output of ``parse_syntax()``.
+    observed_columns : list[str]
+        Column names from the data (observed variables).
+    auto_var : bool
+        Automatically add residual variances for all variables.
+    auto_cov_latent : bool
+        Automatically add covariances between latent variables (CFA default).
+    fixed_x : bool
+        If True, treat exogenous observed variables as fixed (not estimated).
+
+    Returns
+    -------
+    ModelSpecification
+    """
+    # Identify latent variables (appear on LHS of =~)
+    latent_vars: list[str] = []
+    for tok in tokens:
+        if tok.op == "=~" and tok.lhs not in latent_vars:
+            latent_vars.append(tok.lhs)
+
+    # Collect all observed vars referenced in the model
+    referenced_obs: list[str] = []
+    for tok in tokens:
+        for term in tok.rhs:
+            if term.var in observed_columns and term.var not in referenced_obs:
+                referenced_obs.append(term.var)
+        # LHS of ~ or ~~ might also be observed
+        if tok.op in ("~", "~~") and tok.lhs in observed_columns:
+            if tok.lhs not in referenced_obs:
+                referenced_obs.append(tok.lhs)
+
+    observed_vars = referenced_obs
+    all_vars = observed_vars + latent_vars
+    n = len(all_vars)
+
+    spec = ModelSpecification(
+        observed_vars=observed_vars,
+        latent_vars=latent_vars,
+        all_vars=all_vars,
+    )
+
+    A_free = np.zeros((n, n), dtype=bool)
+    A_values = np.zeros((n, n), dtype=float)
+    S_free = np.zeros((n, n), dtype=bool)
+    S_values = np.zeros((n, n), dtype=float)
+
+    # Filter matrix: selects observed from all_vars
+    F = np.zeros((len(observed_vars), n), dtype=float)
+    for i, ov in enumerate(observed_vars):
+        F[i, all_vars.index(ov)] = 1.0
+
+    params: list[ParamInfo] = []
+
+    # --- Process tokens ---
+    first_indicator: dict[str, bool] = {}  # track first indicator per latent
+
+    for tok in tokens:
+        if tok.op == "=~":
+            # Factor loadings: A[indicator, latent] = loading
+            lv = tok.lhs
+            for term in tok.rhs:
+                row = spec._idx(term.var)
+                col = spec._idx(lv)
+
+                if lv not in first_indicator:
+                    # Fix first loading to 1.0 for identification
+                    first_indicator[lv] = True
+                    if term.fixed:
+                        val = term.start_value if term.start_value is not None else 1.0
+                        A_values[row, col] = val
+                    elif term.modifier is None:
+                        # Default: fix first to 1.0
+                        A_values[row, col] = 1.0
+                    else:
+                        # Has a label but no fixed value — still fix to 1
+                        A_values[row, col] = 1.0
+                    params.append(ParamInfo(lv, "=~", term.var, free=False, value=A_values[row, col]))
+                else:
+                    if term.fixed:
+                        val = term.start_value if term.start_value is not None else 0.0
+                        A_values[row, col] = val
+                        params.append(ParamInfo(lv, "=~", term.var, free=False, value=val))
+                    else:
+                        A_free[row, col] = True
+                        A_values[row, col] = 0.5  # starting value
+                        label = term.modifier if isinstance(term.modifier, str) else None
+                        params.append(ParamInfo(lv, "=~", term.var, free=True, value=0.5, label=label))
+
+        elif tok.op == "~":
+            # Regression: A[dv, iv] = coefficient
+            dv = tok.lhs
+            for term in tok.rhs:
+                row = spec._idx(dv)
+                col = spec._idx(term.var)
+                if term.fixed:
+                    val = term.start_value if term.start_value is not None else 0.0
+                    A_values[row, col] = val
+                    params.append(ParamInfo(dv, "~", term.var, free=False, value=val))
+                else:
+                    A_free[row, col] = True
+                    A_values[row, col] = 0.0
+                    label = term.modifier if isinstance(term.modifier, str) else None
+                    params.append(ParamInfo(dv, "~", term.var, free=True, value=0.0, label=label))
+
+        elif tok.op == "~~":
+            # (Co)variance: S[var1, var2] = value
+            for term in tok.rhs:
+                i = spec._idx(tok.lhs)
+                j = spec._idx(term.var)
+                if term.fixed:
+                    val = term.start_value if term.start_value is not None else 0.0
+                    S_values[i, j] = val
+                    S_values[j, i] = val
+                    params.append(ParamInfo(tok.lhs, "~~", term.var, free=False, value=val))
+                else:
+                    S_free[i, j] = True
+                    S_free[j, i] = True
+                    start = 1.0 if i == j else 0.0
+                    S_values[i, j] = start
+                    S_values[j, i] = start
+                    label = term.modifier if isinstance(term.modifier, str) else None
+                    params.append(ParamInfo(tok.lhs, "~~", term.var, free=True, value=start, label=label))
+
+    # --- Auto-add residual variances ---
+    if auto_var:
+        for var in all_vars:
+            i = spec._idx(var)
+            if not S_free[i, i] and S_values[i, i] == 0.0:
+                S_free[i, i] = True
+                S_values[i, i] = 0.5  # starting value for variances
+                params.append(ParamInfo(var, "~~", var, free=True, value=0.5))
+
+    # --- Auto-add covariances between latent variables (CFA) ---
+    if auto_cov_latent and len(latent_vars) > 1:
+        for i_idx in range(len(latent_vars)):
+            for j_idx in range(i_idx + 1, len(latent_vars)):
+                lv_i = latent_vars[i_idx]
+                lv_j = latent_vars[j_idx]
+                ii = spec._idx(lv_i)
+                jj = spec._idx(lv_j)
+                if not S_free[ii, jj] and S_values[ii, jj] == 0.0:
+                    S_free[ii, jj] = True
+                    S_free[jj, ii] = True
+                    S_values[ii, jj] = 0.05
+                    S_values[jj, ii] = 0.05
+                    params.append(ParamInfo(lv_i, "~~", lv_j, free=True, value=0.05))
+
+    spec.A_free = A_free
+    spec.A_values = A_values
+    spec.S_free = S_free
+    spec.S_values = S_values
+    spec.F = F
+    spec.params = params
+
+    return spec
