@@ -162,6 +162,7 @@ model = """
 | `sem(model, data)` | Structural Equation Model (no auto covariances) |
 | `cfa(model, data, group="col")` | Multi-group CFA with measurement invariance testing |
 | `cfa(model, data, estimator="DWLS")` | CFA for ordinal data using polychoric correlations |
+| `cfa(model, data, estimator="bayes")` | Bayesian estimation via NumPyro NUTS sampler |
 | `chi_square_diff_test(m1, m2)` | Nested model comparison via chi-square difference test |
 | `Model(model, data)` | Direct model constructor |
 
@@ -201,6 +202,82 @@ model = """
 fit = sem(model, data=df)
 fit.defined_estimates()  # indirect effect with delta method SE
 ```
+
+### Bayesian Estimation
+
+semla supports full Bayesian SEM estimation via [NumPyro](https://num.pyro.ai/). Pass `estimator="bayes"` to use NUTS (No-U-Turn Sampler) with adaptive convergence monitoring.
+
+```bash
+pip install semla[bayes]  # installs numpyro and jax
+```
+
+```python
+from semla import cfa
+from semla.datasets import HolzingerSwineford1939
+
+df = HolzingerSwineford1939()
+model = """
+    visual  =~ x1 + x2 + x3
+    textual =~ x4 + x5 + x6
+    speed   =~ x7 + x8 + x9
+"""
+
+# Bayesian estimation with data-adaptive priors (default)
+fit = cfa(model, data=df, estimator="bayes")
+fit.summary()
+
+# Customize sampling
+fit = cfa(model, data=df, estimator="bayes",
+          chains=4, warmup=1000, draws=2000, cores=4, seed=42)
+
+# Weak informative priors
+fit = cfa(model, data=df, estimator="bayes", priors="weak")
+
+# Per-parameter or matrix-level prior overrides
+from semla.priors import Normal, InverseGamma
+fit = cfa(model, data=df, estimator="bayes",
+          priors={"loadings": Normal(0, 1), "f1=~x2": Normal(0.7, 0.2)})
+```
+
+**Bayesian output:**
+
+```
+semla 0.1.0 — Bayesian SEM Results (NumPyro)
+=================================================================
+
+  Estimator                                           Bayes
+  Chains                                                  4
+  Draws per chain                                      2000
+  Warmup per chain                                     1000
+  Divergences                                             0
+
+Parameter Estimates (posterior):
+
+  lhs        op   rhs            mean   median       sd ci.lower ci.upper   rhat     ess
+  -----------------------------------------------------------------------------------
+
+  Latent Variables:
+  visual     =~   x2            0.579    0.573    0.112    0.377    0.820  1.000    7224
+  visual     =~   x3            0.762    0.753    0.122    0.552    1.026  1.001    5970
+  ...
+```
+
+**Bayesian-specific methods:**
+
+```python
+fit.results.draws()         # raw posterior samples (DataFrame)
+fit.results.estimates()     # mean, median, sd, CI, R-hat, ESS
+fit.results.diagnostics()   # divergences, min ESS, max R-hat
+fit.results.waic()          # WAIC model comparison
+fit.results.loo()           # LOO-CV via PSIS
+```
+
+**Features:**
+- Data-adaptive priors scaled by observed SDs (brms-style), or weak informative preset
+- Adaptive convergence: auto-extends draws or increases adapt_delta when R-hat > 1.01
+- Positive loading constraints prevent sign-flipping in structural models
+- Parallel chain execution on CPU (one core per chain by default)
+- WAIC and PSIS-LOO for Bayesian model comparison
 
 ## Fit Indices
 
@@ -243,6 +320,7 @@ df = HolzingerSwineford1939()
 | `modindices(fit)` | `fit.modindices()` |
 | `cfa(model, data, group="x")` | `cfa(model, data, group="x")` |
 | `cfa(model, data, ordered=TRUE)` | `cfa(model, data, estimator="DWLS")` |
+| `blavaan::bcfa(model, data)` | `cfa(model, data, estimator="bayes")` |
 | `summary(fit, rsquare=TRUE)` | `fit.r_squared()` |
 | `parameterEstimates(fit)` (with `:=`) | `fit.defined_estimates()` |
 | `lavPredict(fit)` | `fit.predict()` |
@@ -251,9 +329,14 @@ df = HolzingerSwineford1939()
 
 ## Dependencies
 
+**Core:**
 - [NumPy](https://numpy.org/) >= 1.22
 - [SciPy](https://scipy.org/) >= 1.8
 - [pandas](https://pandas.pydata.org/) >= 1.4
+
+**Bayesian estimation** (optional — `pip install semla[bayes]`):
+- [NumPyro](https://num.pyro.ai/) >= 0.13
+- [JAX](https://jax.readthedocs.io/) >= 0.4
 
 ## Roadmap
 
@@ -277,9 +360,7 @@ df = HolzingerSwineford1939()
 - [x] IRT models (1PL, 2PL, GRM) with ICC, information functions, and ability estimation
 - [x] Residual diagnostics and Mardia's multivariate normality test
 - [x] Input validation and Heywood case warnings
-
-**Future:**
-- [ ] Bayesian MCMC estimation ([#18](https://github.com/amospagin/semla/issues/18))
+- [x] Bayesian MCMC estimation via NumPyro (NUTS sampler, adaptive priors, WAIC/LOO)
 
 
 ## License
