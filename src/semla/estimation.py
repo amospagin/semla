@@ -116,43 +116,66 @@ def _compute_se(
     sample_cov: np.ndarray,
     n_obs: int,
 ) -> np.ndarray:
-    """Compute standard errors from numerically estimated Hessian."""
-    eps = 1e-5
-    k = len(theta)
-    H = np.zeros((k, k))
-    f0 = ml_objective(theta, spec, sample_cov, n_obs)
+    """Compute standard errors using the expected information matrix.
 
+    Uses the analytical formula for expected information under ML:
+        I_ij = (N-1)/2 * tr(Sigma^{-1} dSigma_i Sigma^{-1} dSigma_j)
+        Var(theta) = inv(I)
+
+    First derivatives of Sigma w.r.t. theta are computed numerically.
+    This is more stable than computing second derivatives of F_ML.
+    """
+    eps = 1e-7
+    k = len(theta)
+
+    # Model-implied covariance at the optimum
+    A, S_mat = spec.unpack(theta)
+    sigma = _model_implied_cov(A, S_mat, spec.F)
+    if sigma is None:
+        return np.full(k, np.nan)
+
+    try:
+        sigma_inv = np.linalg.inv(sigma)
+    except np.linalg.LinAlgError:
+        return np.full(k, np.nan)
+
+    # Compute dSigma/dtheta_i numerically (central differences)
+    p = sigma.shape[0]
+    dSigma = np.zeros((k, p, p))
+    for i in range(k):
+        theta_plus = theta.copy()
+        theta_minus = theta.copy()
+        theta_plus[i] += eps
+        theta_minus[i] -= eps
+
+        A_p, S_p = spec.unpack(theta_plus)
+        A_m, S_m = spec.unpack(theta_minus)
+
+        sig_p = _model_implied_cov(A_p, S_p, spec.F)
+        sig_m = _model_implied_cov(A_m, S_m, spec.F)
+
+        if sig_p is None or sig_m is None:
+            return np.full(k, np.nan)
+
+        dSigma[i] = (sig_p - sig_m) / (2 * eps)
+
+    # Expected information matrix:
+    # I_ij = (N-1)/2 * tr(Sigma^{-1} @ dSigma_i @ Sigma^{-1} @ dSigma_j)
+    # Precompute Sigma^{-1} @ dSigma_i for each i
+    SinvdS = np.zeros((k, p, p))
+    for i in range(k):
+        SinvdS[i] = sigma_inv @ dSigma[i]
+
+    info = np.zeros((k, k))
     for i in range(k):
         for j in range(i, k):
-            theta_pp = theta.copy()
-            theta_pm = theta.copy()
-            theta_mp = theta.copy()
-            theta_mm = theta.copy()
+            info[i, j] = 0.5 * (n_obs - 1) * np.trace(SinvdS[i] @ SinvdS[j])
+            info[j, i] = info[i, j]
 
-            theta_pp[i] += eps
-            theta_pp[j] += eps
-            theta_pm[i] += eps
-            theta_pm[j] -= eps
-            theta_mp[i] -= eps
-            theta_mp[j] += eps
-            theta_mm[i] -= eps
-            theta_mm[j] -= eps
-
-            H[i, j] = (
-                ml_objective(theta_pp, spec, sample_cov, n_obs)
-                - ml_objective(theta_pm, spec, sample_cov, n_obs)
-                - ml_objective(theta_mp, spec, sample_cov, n_obs)
-                + ml_objective(theta_mm, spec, sample_cov, n_obs)
-            ) / (4 * eps * eps)
-            H[j, i] = H[i, j]
-
-    # Standard errors = sqrt(diag(2 * inv(H) / (n-1)))
-    # Factor of 2 because F_ML = 2 * log-likelihood ratio / (n-1)
-    # Actually: Var(theta) = 2 * inv(H) / (N - 1) for normal-theory ML
+    # Var(theta) = inv(I), SE = sqrt(diag(inv(I)))
     try:
-        H_inv = np.linalg.inv(H)
-        var_theta = 2.0 * np.diag(H_inv) / (n_obs - 1)
-        # Protect against negative variances
+        info_inv = np.linalg.inv(info)
+        var_theta = np.diag(info_inv)
         se = np.where(var_theta > 0, np.sqrt(var_theta), np.nan)
         return se
     except np.linalg.LinAlgError:
@@ -188,15 +211,29 @@ def estimate(
     # Starting values
     theta0 = spec.pack_start()
 
-    # Optimize
+    # Optimize with BFGS
     result = optimize.minimize(
         ml_objective,
         theta0,
         args=(spec, sample_cov, n_obs),
         method="BFGS",
         jac=ml_gradient,
-        options={"maxiter": 5000, "gtol": 1e-6},
+        options={"maxiter": 10000, "gtol": 1e-6},
     )
+
+    # Polish: re-run from the BFGS solution with tighter tolerance
+    if result.success:
+        result2 = optimize.minimize(
+            ml_objective,
+            result.x,
+            args=(spec, sample_cov, n_obs),
+            method="BFGS",
+            jac=ml_gradient,
+            options={"maxiter": 10000, "gtol": 1e-9},
+        )
+        if result2.fun <= result.fun + 1e-10:
+            result2.success = True  # accept if objective didn't increase
+            result = result2
 
     if not result.success:
         warnings.warn(

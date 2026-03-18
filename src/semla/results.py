@@ -128,8 +128,9 @@ class ModelResults:
             def lower_func(ncp):
                 return stats.ncx2.cdf(chi_sq, df, ncp) - (1 - alpha / 2)
 
-            if stats.ncx2.cdf(chi_sq, df, 0) < (1 - alpha / 2):
-                ncp_lower = brentq(lower_func, 0, max(chi_sq * 3, 100))
+            # If cdf at ncp=0 exceeds target, a positive ncp is needed
+            if stats.ncx2.cdf(chi_sq, df, 0) > (1 - alpha / 2):
+                ncp_lower = brentq(lower_func, 0, max(chi_sq * 5, 200))
             else:
                 ncp_lower = 0.0
             rmsea_lower = np.sqrt(max(ncp_lower, 0) / (df * (n - 1)))
@@ -207,12 +208,15 @@ class ModelResults:
                 est = p.value
 
             if p.free:
-                se = self._se[se_idx] if se_idx < len(self._se) else np.nan
+                theta_idx = self._spec.param_theta_index(p)
+                if theta_idx is not None and theta_idx < len(self._se):
+                    se = self._se[theta_idx]
+                else:
+                    se = np.nan
                 z = est / se if se > 0 and not np.isnan(se) else np.nan
                 pval = 2 * (1 - stats.norm.cdf(abs(z))) if not np.isnan(z) else np.nan
                 ci_lower = est - 1.96 * se if not np.isnan(se) else np.nan
                 ci_upper = est + 1.96 * se if not np.isnan(se) else np.nan
-                se_idx += 1
             else:
                 se = np.nan
                 z = np.nan

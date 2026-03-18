@@ -78,6 +78,56 @@ class ModelSpecification:
         s_vals = self.S_values[self._S_free_lower]
         return np.concatenate([a_vals, s_vals])
 
+    def param_theta_index(self, p: "ParamInfo") -> int | None:
+        """Return the index in the theta vector for a given free parameter.
+
+        Returns None if the parameter is fixed.
+        """
+        if not p.free:
+            return None
+
+        if p.op == "=~":
+            row = self._idx(p.rhs)
+            col = self._idx(p.lhs)
+            # Count how many True entries in A_free come before (row, col) in row-major
+            flat_idx = row * self.n_vars + col
+            a_flat = self.A_free.ravel()
+            count = 0
+            for k in range(flat_idx):
+                if a_flat[k]:
+                    count += 1
+            return count
+
+        elif p.op == "~":
+            row = self._idx(p.lhs)
+            col = self._idx(p.rhs)
+            flat_idx = row * self.n_vars + col
+            a_flat = self.A_free.ravel()
+            count = 0
+            for k in range(flat_idx):
+                if a_flat[k]:
+                    count += 1
+            return count
+
+        elif p.op == "~~":
+            n_a = int(np.sum(self.A_free))
+            i = self._idx(p.lhs)
+            j = self._idx(p.rhs)
+            # Use lower triangle: row = max, col = min
+            row, col = max(i, j), min(i, j)
+            s_lower = self._S_free_lower
+            # Count how many True entries come before (row, col) in row-major
+            count = 0
+            for r in range(self.n_vars):
+                for c in range(r + 1):  # lower triangle: c <= r
+                    if r == row and c == col:
+                        return n_a + count
+                    if s_lower[r, c]:
+                        count += 1
+            return None
+
+        return None
+
     def unpack(self, theta: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Unpack a 1-D parameter vector into A and S matrices."""
         n_a = int(np.sum(self.A_free))
