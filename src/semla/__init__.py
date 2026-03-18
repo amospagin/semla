@@ -2,5 +2,6 @@
 
 from ._version import __version__
 from .model import Model, cfa, sem
+from . import datasets
 
-__all__ = ["Model", "cfa", "sem", "__version__"]
+__all__ = ["Model", "cfa", "sem", "datasets", "__version__"]
