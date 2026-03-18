@@ -48,6 +48,11 @@ class ModelSpecification:
     S_values: np.ndarray = field(default=None)
     F: np.ndarray = field(default=None)  # filter matrix
 
+    # Mean structure (optional)
+    m_free: np.ndarray = field(default=None)   # bool mask (n_vars,)
+    m_values: np.ndarray = field(default=None)  # starting/fixed values (n_vars,)
+    meanstructure: bool = False
+
     @property
     def n_obs(self) -> int:
         return len(self.observed_vars)
@@ -67,7 +72,10 @@ class ModelSpecification:
 
     @property
     def n_free(self) -> int:
-        return int(np.sum(self.A_free) + np.sum(self._S_free_lower))
+        count = int(np.sum(self.A_free) + np.sum(self._S_free_lower))
+        if self.meanstructure and self.m_free is not None:
+            count += int(np.sum(self.m_free))
+        return count
 
     def _idx(self, var: str) -> int:
         return self.all_vars.index(var)
@@ -76,7 +84,10 @@ class ModelSpecification:
         """Pack free parameter starting values into a 1-D vector."""
         a_vals = self.A_values[self.A_free]
         s_vals = self.S_values[self._S_free_lower]
-        return np.concatenate([a_vals, s_vals])
+        parts = [a_vals, s_vals]
+        if self.meanstructure and self.m_free is not None:
+            parts.append(self.m_values[self.m_free])
+        return np.concatenate(parts)
 
     def param_theta_index(self, p: "ParamInfo") -> int | None:
         """Return the index in the theta vector for a given free parameter.
@@ -126,18 +137,40 @@ class ModelSpecification:
                         count += 1
             return None
 
+        elif p.op == "~1":
+            if not self.meanstructure or self.m_free is None:
+                return None
+            n_a = int(np.sum(self.A_free))
+            n_s = int(np.sum(self._S_free_lower))
+            i = self._idx(p.lhs)
+            count = int(np.sum(self.m_free[:i]))
+            return n_a + n_s + count
+
         return None
 
     def unpack(self, theta: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Unpack a 1-D parameter vector into A and S matrices."""
         n_a = int(np.sum(self.A_free))
+        n_s = int(np.sum(self._S_free_lower))
         A = self.A_values.copy()
         S = self.S_values.copy()
         A[self.A_free] = theta[:n_a]
-        S[self._S_free_lower] = theta[n_a:]
+        S[self._S_free_lower] = theta[n_a:n_a + n_s]
         # Mirror to upper triangle for symmetry
         S = np.tril(S) + np.tril(S, -1).T
         return A, S
+
+    def unpack_m(self, theta: np.ndarray) -> np.ndarray:
+        """Unpack the m (intercept) vector from theta.
+
+        Only meaningful when meanstructure=True.
+        """
+        n_a = int(np.sum(self.A_free))
+        n_s = int(np.sum(self._S_free_lower))
+        m = self.m_values.copy()
+        if self.m_free is not None:
+            m[self.m_free] = theta[n_a + n_s:]
+        return m
 
 
 def build_specification(
@@ -146,6 +179,7 @@ def build_specification(
     auto_var: bool = True,
     auto_cov_latent: bool = True,
     fixed_x: bool = False,
+    meanstructure: bool = False,
 ) -> ModelSpecification:
     """Build a RAM specification from parsed tokens and data column names.
 
@@ -161,11 +195,18 @@ def build_specification(
         Automatically add covariances between latent variables (CFA default).
     fixed_x : bool
         If True, treat exogenous observed variables as fixed (not estimated).
+    meanstructure : bool
+        If True, estimate intercepts for observed variables.
+    sample_means : np.ndarray, optional
+        Sample means for observed variables (used as starting values).
 
     Returns
     -------
     ModelSpecification
     """
+    # Auto-detect mean structure from syntax
+    if any(tok.op == "~1" for tok in tokens):
+        meanstructure = True
     # Identify latent variables (appear on LHS of =~)
     latent_vars: list[str] = []
     for tok in tokens:
@@ -304,6 +345,37 @@ def build_specification(
     spec.S_free = S_free
     spec.S_values = S_values
     spec.F = F
+
+    # --- Mean structure ---
+    if meanstructure:
+        m_free = np.zeros(n, dtype=bool)
+        m_values = np.zeros(n, dtype=float)
+
+        # Process explicit ~1 tokens
+        explicit_intercepts = set()
+        for tok in tokens:
+            if tok.op == "~1":
+                i = spec._idx(tok.lhs)
+                m_free[i] = True
+                m_values[i] = 0.0  # starting value (overridden by Model with sample means)
+                explicit_intercepts.add(tok.lhs)
+                params.append(ParamInfo(tok.lhs, "~1", "1", free=True, value=0.0))
+
+        # Auto-add intercepts for observed variables not explicitly specified
+        for var in observed_vars:
+            if var not in explicit_intercepts:
+                i = spec._idx(var)
+                m_free[i] = True
+                m_values[i] = 0.0  # starting value (overridden by Model with sample means)
+                params.append(ParamInfo(var, "~1", "1", free=True, value=0.0))
+
+        # Latent variable intercepts fixed to 0 (identification)
+        # They stay at m_free[i] = False, m_values[i] = 0.0
+
+        spec.m_free = m_free
+        spec.m_values = m_values
+        spec.meanstructure = True
+
     spec.params = params
 
     return spec

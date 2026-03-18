@@ -124,11 +124,24 @@ class Model:
 
         # Build specification
         auto_cov_latent = kwargs.get("auto_cov_latent", True)
+        meanstructure = kwargs.get("meanstructure", False)
+        # Auto-detect from syntax
+        if any(tok.op == "~1" for tok in self.tokens):
+            meanstructure = True
+
         self.spec = build_specification(
             self.tokens,
             data.columns.tolist(),
             auto_cov_latent=auto_cov_latent,
+            meanstructure=meanstructure,
         )
+
+        # Set starting values for intercepts from sample means
+        if self.spec.meanstructure and self.spec.m_values is not None:
+            for i, var in enumerate(self.spec.observed_vars):
+                idx = self.spec._idx(var)
+                if self.spec.m_free[idx]:
+                    self.spec.m_values[idx] = data[var].mean()
 
         # Estimate
         estimator = kwargs.get("estimator", "ML").upper()

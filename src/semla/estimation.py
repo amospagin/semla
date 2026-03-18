@@ -31,6 +31,7 @@ class EstimationResult:
     sample_cov: np.ndarray
     n_obs: int
     spec: ModelSpecification
+    sample_mean: np.ndarray = None
 
 
 def _model_implied_cov(
@@ -47,11 +48,25 @@ def _model_implied_cov(
     return F @ implied_full @ F.T
 
 
+def _model_implied_mean(
+    A: np.ndarray, m: np.ndarray, F: np.ndarray
+) -> np.ndarray | None:
+    """Compute model-implied mean vector: mu = F @ inv(I-A) @ m."""
+    n = A.shape[0]
+    I = np.eye(n)
+    try:
+        IminA_inv = np.linalg.inv(I - A)
+    except np.linalg.LinAlgError:
+        return None
+    return F @ IminA_inv @ m
+
+
 def ml_objective(
     theta: np.ndarray,
     spec: ModelSpecification,
     sample_cov: np.ndarray,
     n_obs: int,
+    sample_mean: np.ndarray = None,
 ) -> float:
     """Compute the ML discrepancy function.
 
@@ -65,6 +80,8 @@ def ml_objective(
         Sample covariance matrix (p x p).
     n_obs : int
         Number of observations.
+    sample_mean : array, optional
+        Sample mean vector (p,). Required when spec.meanstructure=True.
 
     Returns
     -------
@@ -87,6 +104,16 @@ def ml_objective(
         sign_s, logdet_s = np.linalg.slogdet(sample_cov)
 
         fml = logdet_sigma + np.trace(sample_cov @ sigma_inv) - logdet_s - p
+
+        # Mean structure contribution
+        if spec.meanstructure and sample_mean is not None:
+            m = spec.unpack_m(theta)
+            mu = _model_implied_mean(A, m, spec.F)
+            if mu is None:
+                return 1e10
+            diff = sample_mean - mu
+            fml += float(diff @ sigma_inv @ diff)
+
         return fml
 
     except np.linalg.LinAlgError:
@@ -98,15 +125,16 @@ def ml_gradient(
     spec: ModelSpecification,
     sample_cov: np.ndarray,
     n_obs: int,
+    sample_mean: np.ndarray = None,
 ) -> np.ndarray:
     """Compute the gradient of F_ML via finite differences."""
     eps = 1e-7
     grad = np.zeros_like(theta)
-    f0 = ml_objective(theta, spec, sample_cov, n_obs)
+    f0 = ml_objective(theta, spec, sample_cov, n_obs, sample_mean)
     for i in range(len(theta)):
         theta_plus = theta.copy()
         theta_plus[i] += eps
-        grad[i] = (ml_objective(theta_plus, spec, sample_cov, n_obs) - f0) / eps
+        grad[i] = (ml_objective(theta_plus, spec, sample_cov, n_obs, sample_mean) - f0) / eps
     return grad
 
 
@@ -169,8 +197,40 @@ def _compute_se(
     info = np.zeros((k, k))
     for i in range(k):
         for j in range(i, k):
-            info[i, j] = 0.5 * (n_obs - 1) * np.trace(SinvdS[i] @ SinvdS[j])
-            info[j, i] = info[i, j]
+            # Covariance structure information
+            cov_info = 0.5 * (n_obs - 1) * np.trace(SinvdS[i] @ SinvdS[j])
+            info[i, j] = cov_info
+            info[j, i] = cov_info
+
+    # Mean structure information (additive, block-diagonal under normality)
+    if spec.meanstructure:
+        # Compute dmu/dtheta_i numerically
+        A0, _ = spec.unpack(theta)
+        m0 = spec.unpack_m(theta)
+        mu0 = _model_implied_mean(A0, m0, spec.F)
+        if mu0 is not None:
+            dmu = np.zeros((k, p))
+            for i in range(k):
+                theta_plus = theta.copy()
+                theta_minus = theta.copy()
+                theta_plus[i] += eps
+                theta_minus[i] -= eps
+                A_p, _ = spec.unpack(theta_plus)
+                A_m, _ = spec.unpack(theta_minus)
+                m_p = spec.unpack_m(theta_plus)
+                m_m = spec.unpack_m(theta_minus)
+                mu_p = _model_implied_mean(A_p, m_p, spec.F)
+                mu_m = _model_implied_mean(A_m, m_m, spec.F)
+                if mu_p is not None and mu_m is not None:
+                    dmu[i] = (mu_p - mu_m) / (2 * eps)
+
+            # I_ij(mean) = (N-1) * dmu_i' @ Sigma^{-1} @ dmu_j
+            for i in range(k):
+                for j in range(i, k):
+                    mean_info = (n_obs - 1) * float(dmu[i] @ sigma_inv @ dmu[j])
+                    info[i, j] += mean_info
+                    if i != j:
+                        info[j, i] += mean_info
 
     # Var(theta) = inv(I), SE = sqrt(diag(inv(I)))
     try:
@@ -199,7 +259,7 @@ def estimate(
     -------
     EstimationResult
     """
-    # Compute sample covariance matrix
+    # Compute sample statistics
     obs_data = data[spec.observed_vars].values
     n_obs = obs_data.shape[0]
     sample_cov = np.cov(obs_data, rowvar=False, ddof=1)
@@ -208,6 +268,10 @@ def estimate(
     if sample_cov.ndim == 0:
         sample_cov = sample_cov.reshape(1, 1)
 
+    sample_mean = None
+    if spec.meanstructure:
+        sample_mean = np.mean(obs_data, axis=0)
+
     # Starting values
     theta0 = spec.pack_start()
 
@@ -215,7 +279,7 @@ def estimate(
     result = optimize.minimize(
         ml_objective,
         theta0,
-        args=(spec, sample_cov, n_obs),
+        args=(spec, sample_cov, n_obs, sample_mean),
         method="BFGS",
         jac=ml_gradient,
         options={"maxiter": 10000, "gtol": 1e-6},
@@ -226,7 +290,7 @@ def estimate(
         result2 = optimize.minimize(
             ml_objective,
             result.x,
-            args=(spec, sample_cov, n_obs),
+            args=(spec, sample_cov, n_obs, sample_mean),
             method="BFGS",
             jac=ml_gradient,
             options={"maxiter": 10000, "gtol": 1e-9},
@@ -251,4 +315,5 @@ def estimate(
         sample_cov=sample_cov,
         n_obs=n_obs,
         spec=spec,
+        sample_mean=sample_mean,
     )

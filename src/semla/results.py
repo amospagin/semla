@@ -89,7 +89,10 @@ class ModelResults:
 
         # Chi-square
         self.fmin = self._est.fmin
-        self.df = p * (p + 1) // 2 - self._spec.n_free
+        data_points = p * (p + 1) // 2
+        if self._spec.meanstructure:
+            data_points += p  # add mean information
+        self.df = data_points - self._spec.n_free
 
         if self._estimator == "DWLS":
             from .dwls import _scaled_chi_square
@@ -297,6 +300,13 @@ class ModelResults:
                 i = self._spec._idx(p.lhs)
                 j = self._spec._idx(p.rhs)
                 est = S_opt[i, j]
+            elif p.op == "~1":
+                if self._spec.meanstructure:
+                    m = self._spec.unpack_m(self._theta)
+                    i = self._spec._idx(p.lhs)
+                    est = m[i]
+                else:
+                    est = p.value
             else:
                 est = p.value
 
@@ -592,7 +602,7 @@ class ModelResults:
         lines.append("")
 
         # Group by operator
-        for op, label in [("=~", "Latent Variables:"), ("~", "Regressions:"), ("~~", "Covariances/Variances:")]:
+        for op, label in [("=~", "Latent Variables:"), ("~", "Regressions:"), ("~1", "Intercepts:"), ("~~", "Covariances/Variances:")]:
             subset = df[df["op"] == op]
             if subset.empty:
                 continue
