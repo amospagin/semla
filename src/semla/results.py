@@ -268,6 +268,87 @@ class ModelResults:
 
         return pd.DataFrame(rows)
 
+    def standardized_estimates(self, type: str = "std.all") -> pd.DataFrame:
+        """Return standardized parameter estimates.
+
+        Parameters
+        ----------
+        type : str
+            Type of standardization:
+            - ``"std.all"`` — fully standardized (by both LV and observed SD)
+            - ``"std.lv"`` — standardized by latent variable SD only
+
+        Returns
+        -------
+        pd.DataFrame
+            Same structure as ``estimates()`` with added ``est.std`` column.
+        """
+        if type not in ("std.all", "std.lv"):
+            raise ValueError(f"type must be 'std.all' or 'std.lv', got '{type}'")
+
+        df = self.estimates()
+        A_opt, S_opt = self._spec.unpack(self._theta)
+
+        # Compute implied total covariance for all variables (including latent)
+        n = self._spec.n_vars
+        I = np.eye(n)
+        IminA_inv = np.linalg.inv(I - A_opt)
+        total_cov = IminA_inv @ S_opt @ IminA_inv.T
+
+        # SD of each variable (sqrt of diagonal of total covariance)
+        total_sd = np.sqrt(np.maximum(np.diag(total_cov), 0))
+
+        std_est = []
+        for _, row in df.iterrows():
+            lhs, op, rhs, est = row["lhs"], row["op"], row["rhs"], row["est"]
+
+            if op == "=~":
+                # Loading: lhs is latent, rhs is indicator
+                sd_lv = total_sd[self._spec._idx(lhs)]
+                sd_ov = total_sd[self._spec._idx(rhs)]
+
+                if type == "std.lv":
+                    std_val = est * sd_lv if sd_lv > 0 else np.nan
+                else:  # std.all
+                    std_val = est * sd_lv / sd_ov if sd_lv > 0 and sd_ov > 0 else np.nan
+
+            elif op == "~":
+                # Regression: lhs ~ rhs
+                sd_iv = total_sd[self._spec._idx(rhs)]
+                sd_dv = total_sd[self._spec._idx(lhs)]
+
+                if type == "std.lv":
+                    # Only standardize if both are latent
+                    if rhs in self._spec.latent_vars and lhs in self._spec.latent_vars:
+                        std_val = est * sd_iv / sd_dv if sd_dv > 0 else np.nan
+                    else:
+                        std_val = est
+                else:  # std.all
+                    std_val = est * sd_iv / sd_dv if sd_iv > 0 and sd_dv > 0 else np.nan
+
+            elif op == "~~":
+                i = self._spec._idx(lhs)
+                j = self._spec._idx(rhs)
+                sd_i = total_sd[i]
+                sd_j = total_sd[j]
+
+                if type == "std.lv":
+                    if lhs in self._spec.latent_vars and rhs in self._spec.latent_vars:
+                        std_val = est / (sd_i * sd_j) if sd_i > 0 and sd_j > 0 else np.nan
+                    elif lhs in self._spec.latent_vars or rhs in self._spec.latent_vars:
+                        std_val = est
+                    else:
+                        std_val = est
+                else:  # std.all
+                    std_val = est / (sd_i * sd_j) if sd_i > 0 and sd_j > 0 else np.nan
+            else:
+                std_val = est
+
+            std_est.append(std_val)
+
+        df["est.std"] = std_est
+        return df
+
     def summary(self) -> str:
         """Generate a lavaan-style summary string."""
         lines = []

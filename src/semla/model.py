@@ -148,6 +148,16 @@ class Model:
         """Return parameter estimates as a DataFrame."""
         return self.results.estimates()
 
+    def standardized_estimates(self, type: str = "std.all") -> pd.DataFrame:
+        """Return standardized parameter estimates.
+
+        Parameters
+        ----------
+        type : str
+            ``"std.all"`` (fully standardized) or ``"std.lv"`` (by LV SD only).
+        """
+        return self.results.standardized_estimates(type=type)
+
     @property
     def converged(self) -> bool:
         """Whether the optimizer converged."""
