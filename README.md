@@ -157,8 +157,11 @@ model = """
 
 | Function | Description |
 |----------|-------------|
-| `cfa(model, data)` | Confirmatory Factor Analysis (auto-adds covariances between latent variables) |
+| `cfa(model, data)` | Confirmatory Factor Analysis (auto-adds latent covariances) |
 | `sem(model, data)` | Structural Equation Model (no auto covariances) |
+| `cfa(model, data, group="col")` | Multi-group CFA with measurement invariance testing |
+| `cfa(model, data, estimator="DWLS")` | CFA for ordinal data using polychoric correlations |
+| `chi_square_diff_test(m1, m2)` | Nested model comparison via chi-square difference test |
 | `Model(model, data)` | Direct model constructor |
 
 ### SEM Example
@@ -216,6 +219,10 @@ df = HolzingerSwineford1939()
 | `summary(fit, fit.measures=TRUE)` | `fit.summary()` |
 | `fitMeasures(fit)` | `fit.fit_indices()` |
 | `parameterEstimates(fit)` | `fit.estimates()` |
+| `standardizedSolution(fit)` | `fit.standardized_estimates()` |
+| `modindices(fit)` | `fit.modindices()` |
+| `cfa(model, data, group="x")` | `cfa(model, data, group="x")` |
+| `cfa(model, data, ordered=TRUE)` | `cfa(model, data, estimator="DWLS")` |
 
 ## Dependencies
 
@@ -225,12 +232,28 @@ df = HolzingerSwineford1939()
 
 ## Roadmap
 
-- [ ] DWLS/WLS estimators for ordinal data
-- [ ] Standardized solutions (std.all, std.lv)
-- [ ] Modification indices
-- [ ] Multi-group analysis and measurement invariance
-- [ ] Mean structure / intercepts
-- [ ] Robust standard errors (MLR)
+**v0.1.0 (current):**
+- [x] ML estimation with lavaan-validated results
+- [x] DWLS estimator for ordinal data (polychoric correlations)
+- [x] Standardized solutions (std.all, std.lv)
+- [x] Modification indices
+- [x] Multi-group CFA (configural + metric invariance)
+- [x] Chi-square difference test
+- [x] Input validation and Heywood case warnings
+
+**Next priorities:**
+- [ ] AIC / BIC information criteria ([#13](https://github.com/amospagin/semla/issues/13))
+- [ ] R-squared for endogenous variables ([#14](https://github.com/amospagin/semla/issues/14))
+- [ ] Mean structure and intercepts ([#8](https://github.com/amospagin/semla/issues/8))
+- [ ] Equality constraints and parameter labels ([#9](https://github.com/amospagin/semla/issues/9))
+- [ ] Indirect effects and mediation (:= operator) ([#10](https://github.com/amospagin/semla/issues/10))
+
+**Future:**
+- [ ] FIML for missing data ([#15](https://github.com/amospagin/semla/issues/15))
+- [ ] Robust ML estimator (MLR) ([#12](https://github.com/amospagin/semla/issues/12))
+- [ ] Factor score prediction ([#16](https://github.com/amospagin/semla/issues/16))
+- [ ] Reliability measures — omega, alpha ([#17](https://github.com/amospagin/semla/issues/17))
+- [ ] Bootstrap confidence intervals ([#11](https://github.com/amospagin/semla/issues/11))
 
 ## License
 
