@@ -233,6 +233,7 @@ def build_numpyro_model(
     spec: ModelSpecification,
     data: np.ndarray,
     priors: PriorSpec = None,
+    positive_loadings: bool = True,
 ):
     """Build a NumPyro model function from a RAM specification.
 
@@ -244,6 +245,11 @@ def build_numpyro_model(
         Observed data matrix (N x p), columns matching ``spec.observed_vars``.
     priors : str, dict, or None
         Prior specification (see :func:`~semla.prior_defaults.resolve_priors`).
+    positive_loadings : bool
+        If True (default), constrain free factor loadings to be positive
+        using truncated priors.  This prevents sign-flipping
+        non-identifiability that can occur in structural models with
+        latent regressions.
 
     Returns
     -------
@@ -288,19 +294,30 @@ def build_numpyro_model(
     for key, i, ridx, eidx in m_params:
         eff_m_placements.setdefault(eidx, []).append(i)
 
-    # Determine which S params are variances (diagonal) for positivity
-    variance_keys = set()
-    for p in spec.params:
-        if p.free and p.op == "~~" and p.lhs == p.rhs:
-            variance_keys.add(_param_key(p))
+    # Identify loading parameter keys for positive constraints
+    loading_keys = set()
+    if positive_loadings:
+        for p in spec.params:
+            if p.free and p.op == "=~":
+                loading_keys.add(_param_key(p))
 
     def model():
+        import numpyro.distributions as dist
+
         # Sample each effective parameter from its prior
         theta = {}
         for eidx in range(n_effective):
             key = param_keys[eidx]
             prior = prior_dict[key]
-            theta[eidx] = numpyro.sample(key, prior.to_numpyro())
+            numpyro_dist = prior.to_numpyro()
+
+            # Constrain loadings to be positive via truncation
+            if key in loading_keys and isinstance(numpyro_dist, dist.Normal):
+                numpyro_dist = dist.TruncatedNormal(
+                    loc=numpyro_dist.loc, scale=numpyro_dist.scale, low=0.0,
+                )
+
+            theta[eidx] = numpyro.sample(key, numpyro_dist)
 
         # Build A matrix
         A = A_fixed.copy()
@@ -363,6 +380,7 @@ def run_mcmc(
     cores: int | None = None,
     seed: int = 0,
     target_accept_prob: float = 0.8,
+    positive_loadings: bool = True,
     adapt_convergence: bool = True,
     max_retries: int = 2,
     progress_bar: bool = True,
@@ -420,7 +438,9 @@ def run_mcmc(
     numpyro = _import_numpyro()
     from numpyro.infer import MCMC, NUTS
 
-    model_fn, prior_dict, param_keys = build_numpyro_model(spec, data, priors)
+    model_fn, prior_dict, param_keys = build_numpyro_model(
+        spec, data, priors, positive_loadings=positive_loadings,
+    )
 
     current_warmup = num_warmup
     current_samples = num_samples

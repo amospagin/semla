@@ -229,6 +229,7 @@ class Model:
             "num_chains": kwargs.get("chains", kwargs.get("num_chains", 4)),
             "cores": kwargs.get("cores", None),
             "seed": kwargs.get("seed", 0),
+            "positive_loadings": kwargs.get("positive_loadings", True),
             "target_accept_prob": kwargs.get("adapt_delta",
                                              kwargs.get("target_accept_prob", 0.8)),
             "adapt_convergence": kwargs.get("adapt_convergence", True),

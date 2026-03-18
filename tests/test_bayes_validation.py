@@ -216,22 +216,16 @@ class TestCFAValidation:
 
 # ── SEM validation ──────────────────────────────────────────────────────
 
-@pytest.mark.xfail(
-    reason="Latent regression models suffer from sign-flipping non-identifiability "
-           "that requires sign constraints or reparameterization (see #34)",
-    strict=False,
-)
 class TestSEMValidation:
     """Compare SEM with regressions: Bayesian vs ML.
 
-    Structural models with latent regressions are harder to sample due
-    to sign-flipping non-identifiability.  These tests are expected to
-    fail until sign constraints are implemented.
+    Uses positive loading constraints to prevent sign-flipping.
+    Tolerances are slightly wider than CFA due to structural complexity.
     """
 
     def test_bayes_converged(self, bayes_sem):
         diag = bayes_sem.results.diagnostics()
-        assert diag["max_rhat"] < 1.10, (
+        assert diag["max_rhat"] < 1.05, (
             f"Bayesian SEM did not converge: max R-hat = {diag['max_rhat']:.3f}"
         )
 
@@ -240,7 +234,7 @@ class TestSEMValidation:
         regs = comp[comp["category"] == "regressions"]
 
         for _, row in regs.iterrows():
-            assert row["diff"] < 0.3, (
+            assert row["diff"] < 0.2, (
                 f"Regression {row['param']}: ML={row['ml_est']:.3f}, "
                 f"Bayes={row['bayes_mean']:.3f}, diff={row['diff']:.3f}"
             )
@@ -250,7 +244,7 @@ class TestSEMValidation:
         loadings = comp[comp["category"] == "loadings"]
 
         for _, row in loadings.iterrows():
-            assert row["diff"] < 0.25, (
+            assert row["diff"] < 0.15, (
                 f"Loading {row['param']}: ML={row['ml_est']:.3f}, "
                 f"Bayes={row['bayes_mean']:.3f}, diff={row['diff']:.3f}"
             )
