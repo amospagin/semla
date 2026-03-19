@@ -287,7 +287,10 @@ def batch_bayes(
     positive_loadings : bool
         Constrain first loading per factor to be positive.
     priors : str, dict, or None
-        Prior specification (shared across all models).
+        Prior specification.  Can be a shared value applied to all models
+        (e.g. ``"weak"``) or a dict keyed by model name for per-model
+        priors (e.g. ``{"model_a": "weak", "model_b": {"loadings": Normal(0, 1)}}``).
+        Models not listed in a per-model dict use default priors.
     adapt_delta : float
         NUTS target acceptance probability.
 
@@ -343,8 +346,15 @@ def batch_bayes(
         gpu_queue = None
         cpu_queue = [name for name, _ in ranked]
 
-    # Common fit kwargs
-    fit_kwargs = {
+    # Resolve per-model priors
+    # If priors is a dict whose keys match model names, treat as per-model
+    per_model_priors = None
+    if isinstance(priors, dict) and set(priors.keys()) & set(models.keys()):
+        per_model_priors = priors
+    shared_priors = priors if per_model_priors is None else None
+
+    # Common fit kwargs (priors added per-model below)
+    base_fit_kwargs = {
         "warmup": warmup,
         "draws": draws,
         "chains": chains,
@@ -352,8 +362,8 @@ def batch_bayes(
         "positive_loadings": positive_loadings,
         "adapt_delta": adapt_delta,
     }
-    if priors is not None:
-        fit_kwargs["priors"] = priors
+    if shared_priors is not None:
+        base_fit_kwargs["priors"] = shared_priors
 
     # Assign seeds by original order
     model_seeds = {name: seed + i for i, name in enumerate(models)}
@@ -381,8 +391,10 @@ def batch_bayes(
         gpu_busy = False
 
         def _submit(name, backend):
-            kw = dict(fit_kwargs)
+            kw = dict(base_fit_kwargs)
             kw["seed"] = model_seeds[name]
+            if per_model_priors is not None and name in per_model_priors:
+                kw["priors"] = per_model_priors[name]
             future = pool.submit(
                 _fit_worker, models[name], data_dict, data_columns,
                 backend, kw, func,
