@@ -69,7 +69,36 @@ print(diff)
 
 If **p > .05**, the more constrained model fits equally well, supporting that level of invariance.
 
-## Sequential Testing Workflow
+## Automated Testing (Recommended)
+
+Use `measurementInvariance()` to run the full hierarchy in one call:
+
+```python
+from semla import measurementInvariance
+
+result = measurementInvariance(model, data=df, group="school")
+
+result.summary()        # formatted table with PASS/FAIL decisions
+result.table()          # DataFrame with all test statistics
+result.highest_level    # e.g., "metric"
+result["metric"]        # access individual fit objects
+```
+
+Output:
+```
+Level              χ²    df     CFI   RMSEA      Δχ²   Δdf   p(Δχ²)   Decision
+------------------------------------------------------------------------
+configural    115.084    48   0.924   0.068                           baseline
+metric        123.222    54   0.921   0.065    8.138     6    0.228       PASS
+scalar        202.746    63   0.841   0.086   79.524     9    0.000       FAIL
+strict        219.334    72   0.832   0.083   16.588     9    0.056       PASS
+```
+
+Decision criteria: **PASS** if Δχ² p > .05 AND ΔCFI < .01.
+
+## Manual Sequential Testing
+
+You can also test each step individually:
 
 ```python
 fit_config = cfa(model, data=df, group="school", invariance="configural")

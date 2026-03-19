@@ -58,7 +58,7 @@ fit.summary()
 |----------|-----------------|
 | **Model types** | CFA, SEM with regressions, mediation (`:=` indirect effects), growth curves (linear and nonlinear), higher-order factor models, cross-lagged panel models, IRT (1PL, 2PL, GRM) |
 | **Estimators** | ML, MLR (robust Satorra-Bentler), DWLS (ordinal/polychoric), FIML (missing data), Bayesian MCMC (NumPyro NUTS) |
-| **Multi-group** | Configural, metric, scalar, and strict measurement invariance |
+| **Multi-group** | Configural, metric, scalar, strict invariance; automated `measurementInvariance()` testing |
 | **Bayesian** | Adaptive priors, adaptive convergence, parallel chains, WAIC, PSIS-LOO, posterior draws |
 | **Batch estimation** | Run many Bayesian models in parallel across CPU cores + GPU with `batch_bayes()` |
 | **Diagnostics** | Fit indices (CFI, TLI, RMSEA, SRMR), modification indices, residuals, Mardia's normality test |
@@ -221,22 +221,25 @@ fit.abilities()               # person ability (theta) estimates
 
 ## Multi-Group Analysis
 
-Test measurement invariance across groups with increasing constraint levels.
+Test measurement invariance across groups in one call:
+
+```python
+from semla import measurementInvariance
+
+result = measurementInvariance(model, data=df, group="gender")
+result.summary()         # formatted table with PASS/FAIL decisions
+result.highest_level     # e.g., "metric"
+result["metric"]         # access individual fit objects
+```
+
+Or fit each level manually:
 
 ```python
 from semla import cfa, chi_square_diff_test, compare_models
 
-# Fit invariance hierarchy
 fit_config = cfa(model, data=df, group="gender", invariance="configural")
 fit_metric = cfa(model, data=df, group="gender", invariance="metric")
-fit_scalar = cfa(model, data=df, group="gender", invariance="scalar")
-fit_strict = cfa(model, data=df, group="gender", invariance="strict")
 
-# Compare all models at once
-compare_models(configural=fit_config, metric=fit_metric,
-               scalar=fit_scalar, strict=fit_strict)
-
-# Or pairwise
 chi_square_diff_test(fit_metric, fit_config)
 ```
 
@@ -335,6 +338,7 @@ Estimates and SEs typically match lavaan within 0.01, and fit indices within 0.0
 | `modindices(fit)` | `fit.modindices()` |
 | `anova(fit1, fit2, fit3)` | `compare_models(m1=fit1, m2=fit2, m3=fit3)` |
 | `cfa(model, data, group="x")` | `cfa(model, data, group="x")` |
+| `measurementInvariance(model, data, group="x")` | `measurementInvariance(model, data, group="x")` |
 | `cfa(model, data, ordered=TRUE)` | `cfa(model, data, estimator="DWLS")` |
 | `blavaan::bcfa(model, data)` | `cfa(model, data, estimator="bayes")` |
 | `mirt(data, 1, itemtype="2PL")` | `irt(items, data, model_type="2PL")` |

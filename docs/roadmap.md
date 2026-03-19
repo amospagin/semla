@@ -35,6 +35,7 @@
 - [x] Parameter variance-covariance matrix (vcov)
 - [x] Parallel chain execution on CPU
 - [x] Positive loading constraints for sign identification
+- [x] Automated measurement invariance testing (measurementInvariance)
 - [x] Auto-add exogenous latent variable covariances in sem() (lavaan-matching)
 - [x] True DWLS objective function (diagonally weighted least squares)
 - [x] FIML validated on multiple MCAR missingness patterns
