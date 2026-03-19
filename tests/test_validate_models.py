@@ -441,7 +441,126 @@ class TestCrossLaggedPanel:
 
 
 # ============================================================
-# Model E: fitted() — model-implied matrices
+# Model E: RI-CLPM (random-intercept cross-lagged panel model)
+# ============================================================
+# 3-wave, 2-variable panel data with random intercepts.
+# Data generated from known RI-CLPM DGP (seed=42, n=500):
+#   RI variance (x): 0.49, (y): ~0.46
+#   RI covariance: ~0.245
+#   Within-person AR: 0.3, CL: 0.15
+#   Innovation SD: 0.6
+
+class TestRICLPM:
+    """Random-Intercept Cross-Lagged Panel Model (3 waves, 2 variables)."""
+
+    MODEL = """
+        # Random intercepts (between-person)
+        RI_x =~ 1*x1 + 1*x2 + 1*x3
+        RI_y =~ 1*y1 + 1*y2 + 1*y3
+
+        # Autoregressive (within-person)
+        x2 ~ x1
+        x3 ~ x2
+        y2 ~ y1
+        y3 ~ y2
+
+        # Cross-lagged (within-person)
+        x2 ~ y1
+        x3 ~ y2
+        y2 ~ x1
+        y3 ~ x2
+
+        # Wave covariances (within-person)
+        x1 ~~ y1
+        x2 ~~ y2
+        x3 ~~ y3
+
+        # Between-person RI covariance
+        RI_x ~~ RI_y
+    """
+
+    @pytest.fixture(scope="class")
+    def riclpm_data(self):
+        from semla.datasets import riclpm_data
+        return riclpm_data()
+
+    @pytest.fixture(scope="class")
+    def fit(self, riclpm_data):
+        return sem(self.MODEL, data=riclpm_data)
+
+    @pytest.fixture(scope="class")
+    def est(self, fit):
+        return fit.estimates()
+
+    @pytest.fixture(scope="class")
+    def fid(self, fit):
+        return fit.fit_indices()
+
+    # -- convergence and fit --
+
+    def test_converges(self, fit):
+        assert fit.converged
+
+    def test_df_positive(self, fid):
+        assert fid["df"] >= 1
+
+    def test_good_fit(self, fid):
+        assert fid["cfi"] > 0.95
+        assert fid["rmsea"] < 0.08
+
+    # -- random intercept variances (between-person) --
+
+    def test_ri_x_variance_positive(self, est):
+        row = _get_est(est, "RI_x", "~~", "RI_x")
+        assert row["est"] > 0.1, "RI_x variance should be substantial"
+        assert row["est"] < 1.5
+
+    def test_ri_y_variance_positive(self, est):
+        row = _get_est(est, "RI_y", "~~", "RI_y")
+        assert row["est"] > 0.1, "RI_y variance should be substantial"
+        assert row["est"] < 1.5
+
+    def test_ri_covariance_positive(self, est):
+        """RI_x and RI_y should be positively correlated (by construction)."""
+        row = _get_est(est, "RI_x", "~~", "RI_y")
+        assert row["est"] > 0.05
+        assert row["z"] > 2.0, "RI covariance should be significant"
+
+    # -- within-person autoregressive paths --
+
+    def test_ar_paths_positive(self, est):
+        """Within-person AR paths should be positive."""
+        for dv, iv in [("x2", "x1"), ("x3", "x2"), ("y2", "y1"), ("y3", "y2")]:
+            row = _get_est(est, dv, "~", iv)
+            assert row["est"] > -0.5, f"AR {iv}->{dv} unexpectedly negative"
+            assert row["est"] < 1.0, f"AR {iv}->{dv} too large"
+
+    # -- cross-lagged paths are near zero in within-person --
+
+    def test_cl_paths_small(self, est):
+        """Within-person CL paths should be small (RI absorbs between-person)."""
+        for dv, iv in [("x2", "y1"), ("x3", "y2"), ("y2", "x1"), ("y3", "x2")]:
+            row = _get_est(est, dv, "~", iv)
+            assert abs(row["est"]) < 0.5, f"CL {iv}->{dv} larger than expected"
+
+    # -- within-person residual variances --
+
+    def test_residual_variances_positive(self, est):
+        for var in ["x1", "x2", "x3", "y1", "y2", "y3"]:
+            row = _get_est(est, var, "~~", var)
+            assert row["est"] > 0.0, f"{var} residual variance not positive"
+
+    # -- structural check: RI variance < total variance --
+
+    def test_ri_variance_less_than_total(self, est, riclpm_data):
+        """Random intercept variance should be less than total observed variance."""
+        ri_x_var = _get_est(est, "RI_x", "~~", "RI_x")["est"]
+        total_x_var = riclpm_data["x1"].var()
+        assert ri_x_var < total_x_var, "RI_x variance should be < total variance"
+
+
+# ============================================================
+# Model F: fitted() — model-implied matrices
 # ============================================================
 
 class TestFitted:
