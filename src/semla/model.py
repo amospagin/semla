@@ -287,6 +287,16 @@ class Model:
         """
         return self.results.fitted()
 
+    def vcov(self) -> pd.DataFrame:
+        """Return the parameter variance-covariance matrix.
+
+        Returns
+        -------
+        pd.DataFrame
+            Square matrix with rows/columns labeled by parameter.
+        """
+        return self.results.vcov()
+
     def modindices(self, min_mi: float = 0.0, sort: bool = True) -> pd.DataFrame:
         """Return modification indices for fixed parameters.
 

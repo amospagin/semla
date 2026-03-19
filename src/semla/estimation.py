@@ -144,6 +144,7 @@ def _compute_se(
     spec: ModelSpecification,
     sample_cov: np.ndarray,
     n_obs: int,
+    return_vcov: bool = False,
 ) -> np.ndarray:
     """Compute standard errors using the expected information matrix.
 
@@ -238,8 +239,12 @@ def _compute_se(
         info_inv = np.linalg.inv(info)
         var_theta = np.diag(info_inv)
         se = np.where(var_theta > 0, np.sqrt(var_theta), np.nan)
+        if return_vcov:
+            return se, info_inv
         return se
     except np.linalg.LinAlgError:
+        if return_vcov:
+            return np.full(k, np.nan), np.full((k, k), np.nan)
         return np.full(k, np.nan)
 
 

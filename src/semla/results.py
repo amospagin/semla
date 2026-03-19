@@ -27,6 +27,7 @@ class ModelResults:
         self._defined_params = defined_params or []
 
         # Compute standard errors
+        self._vcov = None  # set by ML path; other estimators compute on demand
         if self._estimator == "DWLS":
             from .dwls import _compute_se_dwls
             self._se = _compute_se_dwls(
@@ -49,8 +50,9 @@ class ModelResults:
                 est_result._pattern_groups, self._n_obs,
             )
         else:
-            self._se = _compute_se(
-                self._theta, self._spec, self._sample_cov, self._n_obs
+            self._se, self._vcov = _compute_se(
+                self._theta, self._spec, self._sample_cov, self._n_obs,
+                return_vcov=True,
             )
 
         # Compute fit indices
@@ -364,6 +366,36 @@ class ModelResults:
             result["mean"] = None
 
         return result
+
+    def vcov(self) -> pd.DataFrame:
+        """Return the parameter variance-covariance matrix.
+
+        This is the inverse of the expected information matrix, with rows
+        and columns labeled by parameter names (lhs op rhs).
+
+        Returns
+        -------
+        pd.DataFrame
+            Square matrix of parameter covariances.
+        """
+        if self._vcov is None:
+            # Compute on demand for non-ML estimators
+            _, self._vcov = _compute_se(
+                self._theta, self._spec, self._sample_cov, self._n_obs,
+                return_vcov=True,
+            )
+
+        # Build labels from free parameters
+        est_df = self.estimates()
+        free_params = est_df[est_df["free"]]
+        labels = [f"{r['lhs']} {r['op']} {r['rhs']}" for _, r in free_params.iterrows()]
+
+        n = self._vcov.shape[0]
+        if len(labels) != n:
+            # Fallback: use numeric labels
+            labels = [f"theta_{i}" for i in range(n)]
+
+        return pd.DataFrame(self._vcov, index=labels, columns=labels)
 
     def residuals(self, type: str = "raw") -> np.ndarray:
         """Return residual covariance matrix (observed - implied).
