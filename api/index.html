@@ -1,0 +1,1628 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Structural Equation Modeling with lavaan-style syntax for Python">
+      
+      
+      
+        <link rel="canonical" href="https://amospagin.github.io/semla/api/">
+      
+      
+        <link rel="prev" href="../guide/dwls/">
+      
+      
+        <link rel="next" href="../lavaan-migration/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>API Reference - semla</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="teal" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#api-reference" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="semla" class="md-header__button md-logo" aria-label="semla" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            semla
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              API Reference
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="teal" data-md-color-accent="amber"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="teal" data-md-color-accent="amber"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/amospagin/semla" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    amospagin/semla
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="semla" class="md-nav__button md-logo" aria-label="semla" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    semla
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/amospagin/semla" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    amospagin/semla
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/cfa/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CFA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/sem/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SEM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/multigroup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Group Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/dwls/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ordinal Data (DWLS)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#main-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Main Functions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Main Functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cfamodel-data-groupnone-kwargs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        cfa(model, data, group=None, **kwargs)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#semmodel-data-groupnone-kwargs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        sem(model, data, group=None, **kwargs)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#irtitems-data-model_type2pl-kwargs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        irt(items, data, model_type="2PL", **kwargs)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chi_square_diff_testmodel_restricted-model_free" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        chi_square_diff_test(model_restricted, model_free)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mardia_testdata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        mardia_test(data)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#set_host_devicesn" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        set_host_devices(n)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#model-object" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Model Object
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Model Object">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#properties" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Properties
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bayesianresults-object" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BayesianResults Object
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="BayesianResults Object">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#methods_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#properties_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Properties
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#irtmodel-object" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        IRTModel Object
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="IRTModel Object">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#methods_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multigroupmodel-object" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MultiGroupModel Object
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MultiGroupModel Object">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#methods_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prior-classes-semlapriors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prior Classes (semla.priors)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#datasets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Datasets
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Datasets">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#semladatasetsholzingerswineford1939" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        semla.datasets.HolzingerSwineford1939()
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../lavaan-migration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coming from lavaan?
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#main-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Main Functions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Main Functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cfamodel-data-groupnone-kwargs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        cfa(model, data, group=None, **kwargs)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#semmodel-data-groupnone-kwargs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        sem(model, data, group=None, **kwargs)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#irtitems-data-model_type2pl-kwargs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        irt(items, data, model_type="2PL", **kwargs)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chi_square_diff_testmodel_restricted-model_free" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        chi_square_diff_test(model_restricted, model_free)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mardia_testdata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        mardia_test(data)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#set_host_devicesn" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        set_host_devices(n)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#model-object" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Model Object
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Model Object">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#properties" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Properties
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bayesianresults-object" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BayesianResults Object
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="BayesianResults Object">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#methods_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#properties_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Properties
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#irtmodel-object" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        IRTModel Object
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="IRTModel Object">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#methods_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multigroupmodel-object" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MultiGroupModel Object
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MultiGroupModel Object">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#methods_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prior-classes-semlapriors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prior Classes (semla.priors)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#datasets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Datasets
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Datasets">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#semladatasetsholzingerswineford1939" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        semla.datasets.HolzingerSwineford1939()
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="api-reference">API Reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h1>
+<h2 id="main-functions">Main Functions<a class="headerlink" href="#main-functions" title="Permanent link">&para;</a></h2>
+<h3 id="cfamodel-data-groupnone-kwargs"><code>cfa(model, data, group=None, **kwargs)</code><a class="headerlink" href="#cfamodel-data-groupnone-kwargs" title="Permanent link">&para;</a></h3>
+<p>Fit a Confirmatory Factor Analysis model. Automatically adds covariances between latent variables.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>model</code></td>
+<td><code>str</code></td>
+<td>Model syntax in lavaan format</td>
+</tr>
+<tr>
+<td><code>data</code></td>
+<td><code>DataFrame</code></td>
+<td>Data with columns matching observed variables</td>
+</tr>
+<tr>
+<td><code>group</code></td>
+<td><code>str</code>, optional</td>
+<td>Column name for multi-group analysis</td>
+</tr>
+<tr>
+<td><code>estimator</code></td>
+<td><code>str</code></td>
+<td><code>"ML"</code> (default), <code>"MLR"</code>, <code>"DWLS"</code>, or <code>"bayes"</code></td>
+</tr>
+<tr>
+<td><code>missing</code></td>
+<td><code>str</code></td>
+<td><code>"listwise"</code> (default) or <code>"fiml"</code></td>
+</tr>
+<tr>
+<td><code>invariance</code></td>
+<td><code>str</code></td>
+<td><code>"configural"</code>, <code>"metric"</code>, <code>"scalar"</code>, <code>"strict"</code> (multi-group)</td>
+</tr>
+<tr>
+<td><code>meanstructure</code></td>
+<td><code>bool</code></td>
+<td>Estimate intercepts (default: False)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Bayesian-specific kwargs:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>chains</code></td>
+<td><code>int</code></td>
+<td>4</td>
+<td>Number of MCMC chains</td>
+</tr>
+<tr>
+<td><code>warmup</code></td>
+<td><code>int</code></td>
+<td>1000</td>
+<td>Warmup iterations per chain</td>
+</tr>
+<tr>
+<td><code>draws</code></td>
+<td><code>int</code></td>
+<td>1000</td>
+<td>Posterior draws per chain</td>
+</tr>
+<tr>
+<td><code>cores</code></td>
+<td><code>int</code></td>
+<td>= chains</td>
+<td>CPU cores for parallel chains</td>
+</tr>
+<tr>
+<td><code>seed</code></td>
+<td><code>int</code></td>
+<td>0</td>
+<td>Random seed</td>
+</tr>
+<tr>
+<td><code>priors</code></td>
+<td><code>str/dict</code></td>
+<td>None</td>
+<td><code>"weak"</code>, or dict of Prior objects</td>
+</tr>
+<tr>
+<td><code>adapt_delta</code></td>
+<td><code>float</code></td>
+<td>0.8</td>
+<td>NUTS target acceptance rate</td>
+</tr>
+<tr>
+<td><code>adapt_convergence</code></td>
+<td><code>bool</code></td>
+<td>True</td>
+<td>Auto-retry on poor convergence</td>
+</tr>
+<tr>
+<td><code>positive_loadings</code></td>
+<td><code>bool</code></td>
+<td>True</td>
+<td>Constrain loadings &gt; 0</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Returns:</strong> <code>Model</code> (single-group) or <code>MultiGroupModel</code> (multi-group)</p>
+<hr />
+<h3 id="semmodel-data-groupnone-kwargs"><code>sem(model, data, group=None, **kwargs)</code><a class="headerlink" href="#semmodel-data-groupnone-kwargs" title="Permanent link">&para;</a></h3>
+<p>Fit a Structural Equation Model. Same as <code>cfa()</code> but does NOT auto-add covariances between latent variables.</p>
+<hr />
+<h3 id="irtitems-data-model_type2pl-kwargs"><code>irt(items, data, model_type="2PL", **kwargs)</code><a class="headerlink" href="#irtitems-data-model_type2pl-kwargs" title="Permanent link">&para;</a></h3>
+<p>Fit an Item Response Theory model.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>items</code></td>
+<td><code>list[str]</code></td>
+<td>Column names for the items</td>
+</tr>
+<tr>
+<td><code>data</code></td>
+<td><code>DataFrame</code></td>
+<td>Data with item columns</td>
+</tr>
+<tr>
+<td><code>model_type</code></td>
+<td><code>str</code></td>
+<td><code>"1PL"</code>, <code>"2PL"</code>, or <code>"GRM"</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Returns:</strong> <code>IRTModel</code></p>
+<hr />
+<h3 id="chi_square_diff_testmodel_restricted-model_free"><code>chi_square_diff_test(model_restricted, model_free)</code><a class="headerlink" href="#chi_square_diff_testmodel_restricted-model_free" title="Permanent link">&para;</a></h3>
+<p>Chi-square difference test for nested model comparison.</p>
+<p><strong>Returns:</strong> <code>dict</code> with <code>chi_sq_diff</code>, <code>df_diff</code>, <code>p_value</code></p>
+<hr />
+<h3 id="mardia_testdata"><code>mardia_test(data)</code><a class="headerlink" href="#mardia_testdata" title="Permanent link">&para;</a></h3>
+<p>Mardia's test for multivariate normality.</p>
+<p><strong>Returns:</strong> <code>dict</code> with <code>skewness</code>, <code>skewness_p</code>, <code>kurtosis</code>, <code>kurtosis_p</code>, <code>recommendation</code></p>
+<hr />
+<h3 id="set_host_devicesn"><code>set_host_devices(n)</code><a class="headerlink" href="#set_host_devicesn" title="Permanent link">&para;</a></h3>
+<p>Set the number of CPU devices for parallel MCMC chains. Call before any Bayesian fitting.</p>
+<hr />
+<h2 id="model-object">Model Object<a class="headerlink" href="#model-object" title="Permanent link">&para;</a></h2>
+<p>Returned by <code>cfa()</code> and <code>sem()</code> for single-group frequentist models.</p>
+<h3 id="methods">Methods<a class="headerlink" href="#methods" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Returns</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>summary()</code></td>
+<td><code>str</code></td>
+<td>Lavaan-style summary</td>
+</tr>
+<tr>
+<td><code>fit_indices()</code></td>
+<td><code>dict</code></td>
+<td>Chi-square, CFI, TLI, RMSEA, SRMR, AIC, BIC</td>
+</tr>
+<tr>
+<td><code>estimates()</code></td>
+<td><code>DataFrame</code></td>
+<td>Parameter estimates with SEs, z-values, p-values</td>
+</tr>
+<tr>
+<td><code>standardized_estimates(type)</code></td>
+<td><code>DataFrame</code></td>
+<td><code>"std.all"</code> or <code>"std.lv"</code></td>
+</tr>
+<tr>
+<td><code>modindices(min_mi=0)</code></td>
+<td><code>DataFrame</code></td>
+<td>Modification indices</td>
+</tr>
+<tr>
+<td><code>defined_estimates()</code></td>
+<td><code>DataFrame</code></td>
+<td>Defined parameters (<code>:=</code> operator)</td>
+</tr>
+<tr>
+<td><code>residuals(type="raw")</code></td>
+<td><code>ndarray</code></td>
+<td>Residual covariance matrix</td>
+</tr>
+<tr>
+<td><code>r_squared()</code></td>
+<td><code>dict</code></td>
+<td>R-squared for endogenous variables</td>
+</tr>
+<tr>
+<td><code>reliability()</code></td>
+<td><code>dict</code></td>
+<td>Omega and alpha per factor</td>
+</tr>
+<tr>
+<td><code>predict(method="regression")</code></td>
+<td><code>DataFrame</code></td>
+<td>Factor scores</td>
+</tr>
+<tr>
+<td><code>bootstrap(nboot=1000)</code></td>
+<td><code>DataFrame</code></td>
+<td>Bootstrap confidence intervals</td>
+</tr>
+</tbody>
+</table>
+<h3 id="properties">Properties<a class="headerlink" href="#properties" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>converged</code></td>
+<td><code>bool</code></td>
+<td>Whether the optimizer converged</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="bayesianresults-object">BayesianResults Object<a class="headerlink" href="#bayesianresults-object" title="Permanent link">&para;</a></h2>
+<p>Returned as <code>fit.results</code> when <code>estimator="bayes"</code>.</p>
+<h3 id="methods_1">Methods<a class="headerlink" href="#methods_1" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Returns</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>summary()</code></td>
+<td><code>str</code></td>
+<td>Bayesian summary with posterior stats</td>
+</tr>
+<tr>
+<td><code>estimates()</code></td>
+<td><code>DataFrame</code></td>
+<td>Mean, median, SD, CI, R-hat, ESS</td>
+</tr>
+<tr>
+<td><code>draws()</code></td>
+<td><code>DataFrame</code></td>
+<td>Raw posterior samples</td>
+</tr>
+<tr>
+<td><code>diagnostics()</code></td>
+<td><code>dict</code></td>
+<td>Divergences, min ESS, max R-hat</td>
+</tr>
+<tr>
+<td><code>waic()</code></td>
+<td><code>dict</code></td>
+<td>WAIC, p_waic, SE</td>
+</tr>
+<tr>
+<td><code>loo()</code></td>
+<td><code>dict</code></td>
+<td>LOO, p_loo, SE, k_max</td>
+</tr>
+<tr>
+<td><code>fit_indices()</code></td>
+<td><code>dict</code></td>
+<td>Same as <code>waic()</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="properties_1">Properties<a class="headerlink" href="#properties_1" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>converged</code></td>
+<td><code>bool</code></td>
+<td>max R-hat &lt; 1.05</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="irtmodel-object">IRTModel Object<a class="headerlink" href="#irtmodel-object" title="Permanent link">&para;</a></h2>
+<p>Returned by <code>irt()</code>.</p>
+<h3 id="methods_2">Methods<a class="headerlink" href="#methods_2" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Returns</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>summary()</code></td>
+<td><code>str</code></td>
+<td>IRT model summary</td>
+</tr>
+<tr>
+<td><code>irt_params()</code></td>
+<td><code>DataFrame</code></td>
+<td>Discrimination, difficulty, thresholds</td>
+</tr>
+<tr>
+<td><code>icc()</code></td>
+<td><code>DataFrame</code></td>
+<td>Item characteristic curves</td>
+</tr>
+<tr>
+<td><code>item_information()</code></td>
+<td><code>DataFrame</code></td>
+<td>Item information functions</td>
+</tr>
+<tr>
+<td><code>test_information()</code></td>
+<td><code>DataFrame</code></td>
+<td>Total test information and SE</td>
+</tr>
+<tr>
+<td><code>abilities(method="regression")</code></td>
+<td><code>DataFrame</code></td>
+<td>Person ability estimates</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="multigroupmodel-object">MultiGroupModel Object<a class="headerlink" href="#multigroupmodel-object" title="Permanent link">&para;</a></h2>
+<p>Returned by <code>cfa()</code> and <code>sem()</code> when <code>group=</code> is specified.</p>
+<h3 id="methods_3">Methods<a class="headerlink" href="#methods_3" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Returns</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>summary()</code></td>
+<td><code>str</code></td>
+<td>Multi-group summary</td>
+</tr>
+<tr>
+<td><code>fit_indices()</code></td>
+<td><code>dict</code></td>
+<td>Multi-group fit indices</td>
+</tr>
+<tr>
+<td><code>estimates()</code></td>
+<td><code>DataFrame</code></td>
+<td>Estimates with <code>group</code> column</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="prior-classes-semlapriors">Prior Classes (<code>semla.priors</code>)<a class="headerlink" href="#prior-classes-semlapriors" title="Permanent link">&para;</a></h2>
+<p>All priors are dataclasses with a <code>to_numpyro()</code> method.</p>
+<p><strong>Unbounded:</strong> <code>Normal(mu, sigma)</code>, <code>StudentT(df, loc, scale)</code>, <code>Cauchy(loc, scale)</code>, <code>Uniform(low, high)</code>, <code>Laplace(loc, scale)</code></p>
+<p><strong>Positive:</strong> <code>HalfCauchy(scale)</code>, <code>HalfNormal(scale)</code>, <code>InverseGamma(concentration, rate)</code>, <code>Exponential(rate)</code>, <code>Gamma(concentration, rate)</code>, <code>LogNormal(loc, scale)</code></p>
+<p><strong>Correlations:</strong> <code>LKJ(dim, concentration)</code>, <code>Beta(concentration1, concentration0)</code></p>
+<hr />
+<h2 id="datasets">Datasets<a class="headerlink" href="#datasets" title="Permanent link">&para;</a></h2>
+<h3 id="semladatasetsholzingerswineford1939"><code>semla.datasets.HolzingerSwineford1939()</code><a class="headerlink" href="#semladatasetsholzingerswineford1939" title="Permanent link">&para;</a></h3>
+<p>Classic dataset: 301 students, 9 mental ability tests, 2 schools.</p>
+<p><strong>Columns:</strong> id, sex, ageyr, agemo, school, grade, x1-x9</p>
+<p><strong>Factors:</strong> visual (x1-x3), textual (x4-x6), speed (x7-x9)</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.expand", "content.code.copy", "toc.follow"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
