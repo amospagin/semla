@@ -39,7 +39,10 @@ class ModelResults:
             )
         elif self._estimator == "MLR":
             from .robust import compute_gamma, compute_robust_se
-            self._gamma = compute_gamma(est_result.raw_data, self._sample_cov)
+            # Use ML sample covariance (/ N) for Gamma, matching lavaan
+            n = self._n_obs
+            sample_cov_ml = self._sample_cov * (n - 1) / n
+            self._gamma = compute_gamma(est_result.raw_data, sample_cov_ml)
             self._se = compute_robust_se(
                 self._theta, self._spec, self._sample_cov, self._n_obs,
                 self._gamma, raw_data=est_result.raw_data,
@@ -124,6 +127,7 @@ class ModelResults:
             self.chi_square, self._scaling_factor = satorra_bentler_chi_square(
                 self.fmin, n, self.df, self._theta, self._spec,
                 self._sample_cov, self._gamma,
+                raw_data=self._est.raw_data,
             )
         else:
             self.chi_square = (n - 1) * self.fmin

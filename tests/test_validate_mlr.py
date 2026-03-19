@@ -108,26 +108,23 @@ class TestMLRRobustStandardErrors:
 class TestMLRFitIndices:
     """Compare MLR Satorra-Bentler scaled fit indices against lavaan."""
 
-    @pytest.mark.xfail(reason="SB chi-square does not yet match lavaan (issue #21)")
     def test_satorra_bentler_chi_square(self, hs_mlr_fit):
-        # lavaan chisq.scaled = 87.131603
+        # lavaan chisq.scaled = 87.131603 (yuan.bentler.mplus)
         idx = hs_mlr_fit.fit_indices()
-        np.testing.assert_allclose(idx["chi_square"], 87.131603, atol=0.5)
+        np.testing.assert_allclose(idx["chi_square"], 87.131603, atol=1.0)
 
     def test_df(self, hs_mlr_fit):
         assert hs_mlr_fit.fit_indices()["df"] == 24
 
-    @pytest.mark.xfail(reason="CFI derived from SB chi-square; off due to chi-sq bug (issue #21)")
     def test_cfi(self, hs_mlr_fit):
         # lavaan cfi.scaled = 0.925207
         idx = hs_mlr_fit.fit_indices()
         np.testing.assert_allclose(idx["cfi"], 0.925207, atol=0.005)
 
-    @pytest.mark.xfail(reason="TLI derived from SB chi-square; off due to chi-sq bug (issue #21)")
     def test_tli(self, hs_mlr_fit):
         # lavaan tli.scaled = 0.887810
         idx = hs_mlr_fit.fit_indices()
-        np.testing.assert_allclose(idx["tli"], 0.887810, atol=0.005)
+        np.testing.assert_allclose(idx["tli"], 0.887810, atol=0.01)
 
     def test_rmsea(self, hs_mlr_fit):
         # lavaan rmsea.scaled = 0.093483

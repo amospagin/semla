@@ -170,71 +170,100 @@ def satorra_bentler_chi_square(
     spec: ModelSpecification,
     sample_cov: np.ndarray,
     gamma: np.ndarray,
+    raw_data: np.ndarray = None,
 ) -> tuple[float, float]:
-    """Compute Satorra-Bentler scaled chi-square.
+    """Compute Yuan-Bentler-Mplus scaled chi-square (matching lavaan MLR).
 
-    T_scaled = T_ML / c where c = tr(UG) / df
+    T_scaled = T_ML / c where c = tr(I_obs^{-1} @ B) / df.
+    Uses the observed information (Hessian) and outer product of casewise
+    scores, matching lavaan's ``test="yuan.bentler.mplus"`` default for MLR.
 
     Returns (T_scaled, scaling_factor).
     """
-    T_ml = (n_obs - 1) * fmin
+    from .estimation import ml_objective
+
+    N = n_obs
+
+    # Recompute T_ML using ML sample covariance (/ N) to match lavaan
+    A_t, S_t = spec.unpack(theta)
+    sigma_t = _model_implied_cov(A_t, S_t, spec.F)
+    if sigma_t is not None:
+        sample_cov_ml = sample_cov * (N - 1) / N
+        sigma_inv = np.linalg.inv(sigma_t)
+        p = sigma_t.shape[0]
+        sign_s, logdet_s = np.linalg.slogdet(sample_cov_ml)
+        sign_sig, logdet_sig = np.linalg.slogdet(sigma_t)
+        F_ml = (logdet_sig + np.trace(sample_cov_ml @ sigma_inv)
+                - logdet_s - p)
+        T_ml = N * F_ml
+    else:
+        T_ml = (N - 1) * fmin
+        return T_ml, 1.0
+
     if df <= 0:
         return T_ml, 1.0
 
-    eps = 1e-7
-    k = len(theta)
-    A, S_mat = spec.unpack(theta)
-    sigma = _model_implied_cov(A, S_mat, spec.F)
-    if sigma is None:
+    if raw_data is None:
         return T_ml, 1.0
 
+    k = len(theta)
+    eps = 1e-7
+
+    # Observed information per observation (numerical Hessian of F_ML / 2)
+    eps_h = 1e-5
+    I_obs = np.zeros((k, k))
+    for i in range(k):
+        for j in range(i, k):
+            tp = theta.copy(); tm = theta.copy()
+            tpp = theta.copy(); tmm = theta.copy()
+            tp[i] += eps_h; tp[j] += eps_h
+            tm[i] += eps_h; tm[j] -= eps_h
+            tpp[i] -= eps_h; tpp[j] += eps_h
+            tmm[i] -= eps_h; tmm[j] -= eps_h
+            H_ij = (
+                ml_objective(tp, spec, sample_cov, N)
+                - ml_objective(tm, spec, sample_cov, N)
+                - ml_objective(tpp, spec, sample_cov, N)
+                + ml_objective(tmm, spec, sample_cov, N)
+            ) / (4 * eps_h ** 2)
+            I_obs[i, j] = 0.5 * H_ij
+            I_obs[j, i] = I_obs[i, j]
+
     try:
-        sigma_inv = np.linalg.inv(sigma)
+        I_obs_inv = np.linalg.inv(I_obs)
     except np.linalg.LinAlgError:
         return T_ml, 1.0
 
-    p = sigma.shape[0]
-    indices = _vech_indices(p)
-    m = len(indices)
-
-    # Jacobian Delta (m x k)
-    Delta = np.zeros((m, k))
+    # Casewise scores (per observation)
+    dSigma = np.zeros((k, p, p))
     for i in range(k):
-        theta_plus = theta.copy()
-        theta_minus = theta.copy()
-        theta_plus[i] += eps
-        theta_minus[i] -= eps
-        A_p, S_p = spec.unpack(theta_plus)
-        A_m, S_m = spec.unpack(theta_minus)
-        sig_p = _model_implied_cov(A_p, S_p, spec.F)
-        sig_m = _model_implied_cov(A_m, S_m, spec.F)
+        tp = theta.copy(); tm = theta.copy()
+        tp[i] += eps; tm[i] -= eps
+        sig_p = _model_implied_cov(*spec.unpack(tp), spec.F)
+        sig_m = _model_implied_cov(*spec.unpack(tm), spec.F)
         if sig_p is None or sig_m is None:
             return T_ml, 1.0
-        dSig = (sig_p - sig_m) / (2 * eps)
-        for a, (r, c) in enumerate(indices):
-            Delta[a, i] = dSig[r, c]
+        dSigma[i] = (sig_p - sig_m) / (2 * eps)
 
-    # W_ml (vech version of Sigma_inv kron Sigma_inv)
-    W_ml = np.zeros((m, m))
-    for a, (i, j) in enumerate(indices):
-        for b, (r, c) in enumerate(indices):
-            val = sigma_inv[i, r] * sigma_inv[j, c]
-            if r != c:
-                val += sigma_inv[i, c] * sigma_inv[j, r]
-            W_ml[a, b] = val
+    SinvdSiSinv = np.zeros((k, p, p))
+    trace_SinvdSi = np.zeros(k)
+    for i in range(k):
+        SinvdS_i = sigma_inv @ dSigma[i]
+        SinvdSiSinv[i] = SinvdS_i @ sigma_inv
+        trace_SinvdSi[i] = np.trace(SinvdS_i)
 
-    # UG = W_ml - W_ml Delta (Delta' W_ml Delta)^{-1} Delta' W_ml
-    try:
-        DtW = Delta.T @ W_ml
-        DtWD_inv = np.linalg.inv(DtW @ Delta)
-        UG = W_ml - W_ml @ Delta @ DtWD_inv @ DtW
-    except np.linalg.LinAlgError:
-        return T_ml, 1.0
+    scores = np.zeros((N, k))
+    for i in range(k):
+        Me = raw_data @ SinvdSiSinv[i].T
+        quad = np.sum(raw_data * Me, axis=1)
+        scores[:, i] = -0.5 * trace_SinvdSi[i] + 0.5 * quad
+    scores -= scores.mean(axis=0)
 
-    # Scaling factor
-    trace_UG_Gamma = np.trace(UG @ gamma)
-    if trace_UG_Gamma > 0:
-        c = trace_UG_Gamma / df
+    B = (scores.T @ scores) / N
+
+    # Yuan-Bentler scaling: c = tr(I_obs^{-1} @ B) / df
+    c = np.trace(I_obs_inv @ B) / df
+    if c > 0:
         return T_ml / c, c
     else:
         return T_ml, 1.0
