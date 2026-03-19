@@ -2,6 +2,7 @@
 
 from ._version import __version__
 from .model import Model, MultiGroupModel, cfa, sem, growth
+from .batch_bayes import batch_bayes
 from .comparisons import chi_square_diff_test, compare_models
 from .diagnostics import mardia_test
 from .irt import irt, IRTModel
@@ -25,6 +26,6 @@ def set_host_devices(n: int) -> None:
 
 __all__ = [
     "Model", "MultiGroupModel", "cfa", "sem", "growth", "irt", "IRTModel",
-    "chi_square_diff_test", "compare_models", "mardia_test", "datasets", "priors",
+    "batch_bayes", "chi_square_diff_test", "compare_models", "mardia_test", "datasets", "priors",
     "set_host_devices", "__version__",
 ]
