@@ -41,7 +41,8 @@ class ModelResults:
             from .robust import compute_gamma, compute_robust_se
             self._gamma = compute_gamma(est_result.raw_data, self._sample_cov)
             self._se = compute_robust_se(
-                self._theta, self._spec, self._sample_cov, self._n_obs, self._gamma,
+                self._theta, self._spec, self._sample_cov, self._n_obs,
+                self._gamma, raw_data=est_result.raw_data,
             )
         elif getattr(est_result, "_missing_method", None) == "fiml":
             from .fiml import _compute_se_fiml
@@ -752,9 +753,11 @@ class ModelResults:
         chi-square (df=1) if a currently fixed-to-zero parameter were freed.
         Uses the univariate score (Lagrange multiplier) test:
 
-            MI = (N-1) * g_r^2 / J_rr
+            MI = score_r^2 / I_rr
 
-        where g_r = dF_ML/dtheta_r and J_rr = 0.5*tr(Sigma^{-1} dSigma_r Sigma^{-1} dSigma_r).
+        where score_r = -(N-1)/2 * tr(W @ dSigma_r) is the score and
+        I_rr = (N-1)/2 * tr(Sigma^{-1} dSigma_r Sigma^{-1} dSigma_r) is
+        the expected information element.
 
         Parameters
         ----------
@@ -771,6 +774,7 @@ class ModelResults:
         A_opt, S_opt = self._spec.unpack(self._theta)
         n = self._spec.n_vars
         N = self._n_obs
+        k = len(self._theta)  # number of free parameters
 
         # Model-implied covariance
         sigma = _model_implied_cov(A_opt, S_opt, self._spec.F)
@@ -780,24 +784,65 @@ class ModelResults:
         W = sigma_inv - sigma_inv @ self._sample_cov @ sigma_inv
 
         eps = 1e-7
+        p = sigma.shape[0]
+
+        # Precompute dSigma for all free parameters and Σ⁻¹ @ dΣ_i
+        dSigma_free = np.zeros((k, p, p))
+        SinvdS_free = np.zeros((k, p, p))
+        for idx in range(k):
+            theta_plus = self._theta.copy()
+            theta_minus = self._theta.copy()
+            theta_plus[idx] += eps
+            theta_minus[idx] -= eps
+            A_p, S_p = self._spec.unpack(theta_plus)
+            A_m, S_m = self._spec.unpack(theta_minus)
+            sig_p = _model_implied_cov(A_p, S_p, self._spec.F)
+            sig_m = _model_implied_cov(A_m, S_m, self._spec.F)
+            if sig_p is not None and sig_m is not None:
+                dSigma_free[idx] = (sig_p - sig_m) / (2 * eps)
+                SinvdS_free[idx] = sigma_inv @ dSigma_free[idx]
+
+        # I_11 = expected information for free parameters
+        I_11 = np.zeros((k, k))
+        for i in range(k):
+            for j in range(i, k):
+                val = 0.5 * (N - 1) * np.trace(SinvdS_free[i] @ SinvdS_free[j])
+                I_11[i, j] = val
+                I_11[j, i] = val
+
+        # I_11^{-1} for Schur complement
+        try:
+            I_11_inv = np.linalg.inv(I_11)
+        except np.linalg.LinAlgError:
+            I_11_inv = np.linalg.pinv(I_11)
+
         rows = []
 
-        def _compute_mi(dSigma_r, symmetric=False):
-            """Compute MI for a candidate fixed parameter."""
-            # g_r = dF_ML/dtheta_r
+        def _compute_mi(dSigma_r):
+            """Compute MI using the Schur complement of the augmented information.
+
+            MI = score_r² / V_rr where V_rr = I_rr - I_r1 @ I_11^{-1} @ I_1r
+            accounts for correlation between the candidate and free parameters.
+            """
+            # Score for this parameter
             g_r = np.trace(W @ dSigma_r)
+            score_r = -0.5 * (N - 1) * g_r
 
-            # J_rr = expected information element
-            # For symmetric (S) off-diagonal params, use 0.5*tr (parameter appears twice)
-            # For asymmetric (A) params, use tr (parameter appears once)
-            SinvdS = sigma_inv @ dSigma_r
-            J_rr = np.trace(SinvdS @ SinvdS)
-            if symmetric:
-                J_rr *= 0.5
+            # I_rr: expected information for candidate parameter
+            SinvdS_r = sigma_inv @ dSigma_r
+            I_rr = 0.5 * (N - 1) * np.trace(SinvdS_r @ SinvdS_r)
 
-            if J_rr > 1e-15:
-                mi = (N - 1) * g_r ** 2 / J_rr
-                epc = g_r / J_rr
+            # I_r1: cross-information with free parameters
+            I_r1 = np.zeros(k)
+            for idx in range(k):
+                I_r1[idx] = 0.5 * (N - 1) * np.trace(SinvdS_r @ SinvdS_free[idx])
+
+            # Schur complement: V_rr = I_rr - I_r1' I_11^{-1} I_r1
+            V_rr = I_rr - I_r1 @ I_11_inv @ I_r1
+
+            if V_rr > 1e-15:
+                mi = score_r ** 2 / V_rr
+                epc = score_r / V_rr
             else:
                 mi = 0.0
                 epc = 0.0
@@ -817,9 +862,17 @@ class ModelResults:
                 if var_j in self._spec.latent_vars and var_i not in self._spec.latent_vars:
                     op, lhs, rhs = "=~", var_j, var_i
                 elif var_j in self._spec.latent_vars and var_i in self._spec.latent_vars:
+                    # Skip regressions between latent variables that already
+                    # have a covariance — lavaan excludes these by default
+                    idx_i = self._spec._idx(var_i)
+                    idx_j = self._spec._idx(var_j)
+                    if self._spec.S_free[idx_i, idx_j] or S_opt[idx_i, idx_j] != 0:
+                        continue
                     op, lhs, rhs = "~", var_i, var_j
                 else:
-                    op, lhs, rhs = "~", var_i, var_j
+                    # Skip regressions between observed variables —
+                    # lavaan excludes these by default
+                    continue
 
                 A_plus = A_opt.copy()
                 A_plus[i, j] = eps
@@ -863,8 +916,7 @@ class ModelResults:
                     continue
 
                 dSigma_r = (sig_plus - sig_minus) / (2 * eps)
-                is_offdiag = (i != j)
-                mi, epc = _compute_mi(dSigma_r, symmetric=is_offdiag)
+                mi, epc = _compute_mi(dSigma_r)
 
                 if mi >= min_mi:
                     rows.append({"lhs": var_i, "op": "~~", "rhs": var_j, "mi": mi, "epc": epc})
