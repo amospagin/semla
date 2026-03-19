@@ -184,6 +184,57 @@ def _gpu_available() -> bool:
 # Main batch function
 # ---------------------------------------------------------------------------
 
+def _count_model_complexity(syntax: str) -> int:
+    """Count observed variables + free parameters as a complexity score."""
+    from .syntax import parse_syntax
+
+    tokens = parse_syntax(syntax)
+    latent = {tok.lhs for tok in tokens if tok.op == "=~"}
+    observed = set()
+    n_free = 0
+    for tok in tokens:
+        for term in tok.rhs:
+            if term.var not in latent:
+                observed.add(term.var)
+            if not term.fixed:
+                n_free += 1
+        if tok.op in ("~", "~~") and tok.lhs not in latent:
+            observed.add(tok.lhs)
+    # Complexity: observed vars (drives matrix size) + free params
+    return len(observed) * 10 + n_free
+
+
+def _collect_result(future, name, backend) -> BatchResult:
+    """Collect a result from a completed future."""
+    try:
+        raw = future.result()
+    except Exception as e:
+        raw = {"status": "error", "error": str(e),
+               "error_type": type(e).__name__}
+
+    if raw["status"] == "ok":
+        return BatchResult(
+            name=name,
+            status="ok",
+            estimates=pd.DataFrame(raw["estimates"]),
+            fit_indices=raw["fit_indices"],
+            converged=raw["converged"],
+            summary=raw["summary"],
+            error=None,
+            backend=backend,
+        )
+    return BatchResult(
+        name=name,
+        status="error",
+        estimates=None,
+        fit_indices=None,
+        converged=None,
+        summary=None,
+        error=raw.get("error", "Unknown error"),
+        backend=backend,
+    )
+
+
 def batch_bayes(
     models: dict[str, str],
     data: pd.DataFrame,
@@ -191,7 +242,6 @@ def batch_bayes(
     func: str = "cfa",
     cpu_cores: int = 4,
     gpu: bool | str = "auto",
-    gpu_threshold: int = 20,
     warmup: int = 1000,
     draws: int = 1000,
     chains: int = 1,
@@ -203,8 +253,9 @@ def batch_bayes(
 ) -> BatchBayesResults:
     """Run multiple Bayesian SEM models in parallel.
 
-    Distributes models across CPU cores and (optionally) a GPU.  Large models
-    are sent to the GPU, smaller ones run on CPU cores in parallel.
+    Uses a dual-queue scheduler: the GPU always works on the most complex
+    remaining model, while CPU cores work on the least complex ones.  When
+    a worker finishes, it picks up the next model from its end of the queue.
 
     Parameters
     ----------
@@ -217,12 +268,7 @@ def batch_bayes(
     cpu_cores : int
         Number of CPU worker processes (default 4).
     gpu : bool or "auto"
-        Whether to use GPU.  ``"auto"`` detects availability.  If True/auto
-        and a GPU is available, the largest models (by number of observed
-        variables) are routed to the GPU.
-    gpu_threshold : int
-        Models with this many or more observed variables are sent to GPU
-        (when gpu is enabled).  Default 20.
+        Whether to use GPU.  ``"auto"`` detects availability.
     warmup : int
         Number of warmup samples per chain.
     draws : int
@@ -259,46 +305,15 @@ def batch_bayes(
     data_columns = list(data.columns)
     data_dict = {col: data[col].tolist() for col in data_columns}
 
-    # Count observed variables per model to decide GPU assignment
-    from .syntax import parse_syntax
+    # Rank models by complexity
+    complexity = {name: _count_model_complexity(syntax)
+                  for name, syntax in models.items()}
+    # Sorted most complex first
+    ranked = sorted(complexity.items(), key=lambda x: -x[1])
 
-    model_sizes = {}
-    for name, syntax in models.items():
-        tokens = parse_syntax(syntax)
-        latent = {tok.lhs for tok in tokens if tok.op == "=~"}
-        observed = set()
-        for tok in tokens:
-            for term in tok.rhs:
-                if term.var not in latent:
-                    observed.add(term.var)
-            if tok.op in ("~", "~~") and tok.lhs not in latent:
-                observed.add(tok.lhs)
-        model_sizes[name] = len(observed)
-
-    # Assign backends
-    assignments = {}
-    if use_gpu:
-        # Sort by size descending; largest go to GPU
-        sorted_models = sorted(model_sizes.items(), key=lambda x: -x[1])
-        for name, n_obs in sorted_models:
-            if n_obs >= gpu_threshold:
-                assignments[name] = "gpu"
-            else:
-                assignments[name] = "cpu"
-        # If no model meets threshold, send the single largest to GPU
-        if not any(b == "gpu" for b in assignments.values()):
-            assignments[sorted_models[0][0]] = "gpu"
-    else:
-        assignments = {name: "cpu" for name in models}
-
-    gpu_models = [n for n, b in assignments.items() if b == "gpu"]
-    cpu_models = [n for n, b in assignments.items() if b == "cpu"]
-
-    n_gpu = len(gpu_models)
-    n_cpu = len(cpu_models)
-    total = len(models)
-    print(f"batch_bayes: {total} models ({n_cpu} CPU, {n_gpu} GPU), "
-          f"{cpu_cores} CPU workers")
+    # Build the work queue: most complex → GPU, least complex → CPU
+    # GPU takes from the front, CPU takes from the back
+    work_queue = [name for name, _ in ranked]
 
     # Common fit kwargs
     fit_kwargs = {
@@ -312,58 +327,80 @@ def batch_bayes(
     if priors is not None:
         fit_kwargs["priors"] = priors
 
-    # Submit all jobs
-    # Use 'spawn' to ensure clean JAX state in each worker
+    # Assign seeds by original order
+    model_seeds = {name: seed + i for i, name in enumerate(models)}
+
+    total = len(models)
+    print(f"batch_bayes: {total} models, "
+          f"{cpu_cores} CPU workers"
+          + (", 1 GPU worker" if use_gpu else "")
+          + f" | ranked by complexity: "
+          + ", ".join(f"{n}({complexity[n]})" for n, _ in ranked))
+
     ctx = mp.get_context("spawn")
-    max_workers = cpu_cores + (1 if n_gpu > 0 else 0)
-
     results = {}
-    futures = {}
+    active_futures = {}  # future -> (name, backend)
 
-    with ProcessPoolExecutor(max_workers=max_workers, mp_context=ctx) as pool:
-        for i, (name, syntax) in enumerate(models.items()):
+    with ProcessPoolExecutor(max_workers=cpu_cores + (1 if use_gpu else 0),
+                             mp_context=ctx) as pool:
+
+        gpu_busy = False
+
+        def _submit(name, backend):
             kw = dict(fit_kwargs)
-            kw["seed"] = seed + i
-            backend = assignments[name]
-
+            kw["seed"] = model_seeds[name]
             future = pool.submit(
-                _fit_worker, syntax, data_dict, data_columns, backend, kw, func
+                _fit_worker, models[name], data_dict, data_columns,
+                backend, kw, func,
             )
-            futures[future] = (name, backend)
+            active_futures[future] = (name, backend)
 
-        # Collect results as they complete
-        for future in as_completed(futures):
-            name, backend = futures[future]
-            try:
-                raw = future.result()
-            except Exception as e:
-                raw = {"status": "error", "error": str(e),
-                       "error_type": type(e).__name__}
+        def _fill_slots():
+            """Fill available CPU and GPU slots from the work queue."""
+            nonlocal gpu_busy
 
-            if raw["status"] == "ok":
-                est_df = pd.DataFrame(raw["estimates"])
-                results[name] = BatchResult(
-                    name=name,
-                    status="ok",
-                    estimates=est_df,
-                    fit_indices=raw["fit_indices"],
-                    converged=raw["converged"],
-                    summary=raw["summary"],
-                    error=None,
-                    backend=backend,
-                )
-            else:
-                results[name] = BatchResult(
-                    name=name,
-                    status="error",
-                    estimates=None,
-                    fit_indices=None,
-                    converged=None,
-                    summary=None,
-                    error=raw.get("error", "Unknown error"),
-                    backend=backend,
-                )
-            print(f"  {name}: {raw['status']} ({backend})")
+            # GPU: take the most complex remaining model (front of queue)
+            if use_gpu and not gpu_busy and work_queue:
+                name = work_queue.pop(0)
+                _submit(name, "gpu")
+                gpu_busy = True
+
+            # CPU: take the least complex remaining models (back of queue)
+            cpu_active = sum(1 for _, (_, b) in active_futures.items()
+                           if b == "cpu")
+            while cpu_active < cpu_cores and work_queue:
+                name = work_queue.pop()  # pop from back (least complex)
+                _submit(name, "cpu")
+                cpu_active += 1
+
+        # Initial fill
+        _fill_slots()
+
+        # Process completions and refill
+        while active_futures:
+            # Wait for any future to complete
+            done = set()
+            for f in list(active_futures):
+                if f.done():
+                    done.add(f)
+
+            if not done:
+                # Brief wait, then check again
+                import time
+                time.sleep(0.1)
+                continue
+
+            for future in done:
+                name, backend = active_futures.pop(future)
+                result = _collect_result(future, name, backend)
+                results[name] = result
+                print(f"  {name}: {result.status} ({backend})")
+
+                if backend == "gpu":
+                    gpu_busy = False
+
+            # Refill slots with remaining work
+            _fill_slots()
 
     # Return in original order
     ordered = {name: results[name] for name in models if name in results}
