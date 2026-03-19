@@ -27,6 +27,8 @@
 - [x] Residual diagnostics and Mardia's multivariate normality test
 - [x] Parallel chain execution on CPU
 - [x] Positive loading constraints for sign identification
+- [x] Growth curve models (growth() convenience function)
+- [x] Higher-order (second-order) factor models
 - [x] Validated against lavaan 0.6-21
 
 ## Known Issues
@@ -40,7 +42,6 @@
 - [ ] Traceplots and posterior visualization
 - [ ] Multi-group Bayesian estimation
 - [ ] 3PL and multidimensional IRT models
-- [ ] Growth curve models
 - [ ] Latent class / mixture models
 - [ ] Penalized likelihood (lasso/ridge SEM)
 - [ ] PyPI release

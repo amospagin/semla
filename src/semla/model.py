@@ -134,11 +134,16 @@ class Model:
         # Filter out := tokens (defined params, not model specification)
         model_tokens = [tok for tok in self.tokens if tok.op != ":="]
 
+        int_ov_free = kwargs.get("int_ov_free", True)
+        int_lv_free = kwargs.get("int_lv_free", False)
+
         self.spec = build_specification(
             model_tokens,
             data.columns.tolist(),
             auto_cov_latent=auto_cov_latent,
             meanstructure=meanstructure,
+            int_ov_free=int_ov_free,
+            int_lv_free=int_lv_free,
         )
 
         # Set starting values for intercepts from sample means
@@ -147,6 +152,28 @@ class Model:
                 idx = self.spec._idx(var)
                 if self.spec.m_free[idx]:
                     self.spec.m_values[idx] = data[var].mean()
+
+            # For growth models (int_lv_free=True): set latent mean starting
+            # values from observed means.  Intercept factor ≈ mean(y1),
+            # slope factor ≈ average per-timepoint change.
+            if int_lv_free:
+                obs = self.spec.observed_vars
+                obs_means = [data[v].mean() for v in obs]
+                for lv in self.spec.latent_vars:
+                    idx = self.spec._idx(lv)
+                    if self.spec.m_free[idx]:
+                        # Use first observed mean as intercept start,
+                        # average change as slope start
+                        self.spec.m_values[idx] = obs_means[0]
+                if len(self.spec.latent_vars) >= 2:
+                    # Second latent var (slope): average change per unit
+                    n_t = len(obs)
+                    if n_t > 1:
+                        slope_start = (obs_means[-1] - obs_means[0]) / (n_t - 1)
+                        slope_lv = self.spec.latent_vars[1]
+                        slope_idx = self.spec._idx(slope_lv)
+                        if self.spec.m_free[slope_idx]:
+                            self.spec.m_values[slope_idx] = slope_start
 
         # Estimate
         # Handle missing data
@@ -514,4 +541,34 @@ def sem(model: str, data: pd.DataFrame, group: str = None, **kwargs):
     kwargs.setdefault("auto_cov_latent", False)
     if group is not None:
         return MultiGroupModel(model, data, group=group, **kwargs)
+    return Model(model, data, **kwargs)
+
+
+def growth(model: str, data: pd.DataFrame, **kwargs):
+    """Fit a latent growth curve model.
+
+    Convenience function matching lavaan::growth(). Sets
+    ``meanstructure=True`` with observed intercepts fixed to 0 and
+    latent means (intercept, slope) freely estimated.
+
+    Parameters
+    ----------
+    model : str
+        Model syntax in lavaan format with fixed loadings, e.g.::
+
+            i =~ 1*y1 + 1*y2 + 1*y3 + 1*y4
+            s =~ 0*y1 + 1*y2 + 2*y3 + 3*y4
+
+    data : pd.DataFrame
+        Data with columns matching observed variables.
+
+    Returns
+    -------
+    Model
+        Fitted growth model object.
+    """
+    kwargs["meanstructure"] = True
+    kwargs["int_ov_free"] = False
+    kwargs["int_lv_free"] = True
+    kwargs.setdefault("auto_cov_latent", True)
     return Model(model, data, **kwargs)

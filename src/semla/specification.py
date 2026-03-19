@@ -221,6 +221,8 @@ def build_specification(
     auto_cov_latent: bool = True,
     fixed_x: bool = False,
     meanstructure: bool = False,
+    int_ov_free: bool = True,
+    int_lv_free: bool = False,
 ) -> ModelSpecification:
     """Build a RAM specification from parsed tokens and data column names.
 
@@ -238,6 +240,14 @@ def build_specification(
         If True, treat exogenous observed variables as fixed (not estimated).
     meanstructure : bool
         If True, estimate intercepts for observed variables.
+    int_ov_free : bool
+        If True (default), observed-variable intercepts are freely estimated.
+        Set to False for growth curve models where observed intercepts are
+        fixed to 0.
+    int_lv_free : bool
+        If True, latent-variable intercepts (means) are freely estimated.
+        Set to True for growth curve models to estimate intercept and slope
+        means.
     sample_means : np.ndarray, optional
         Sample means for observed variables (used as starting values).
 
@@ -403,15 +413,22 @@ def build_specification(
                 params.append(ParamInfo(tok.lhs, "~1", "1", free=True, value=0.0))
 
         # Auto-add intercepts for observed variables not explicitly specified
-        for var in observed_vars:
-            if var not in explicit_intercepts:
-                i = spec._idx(var)
-                m_free[i] = True
-                m_values[i] = 0.0  # starting value (overridden by Model with sample means)
-                params.append(ParamInfo(var, "~1", "1", free=True, value=0.0))
+        if int_ov_free:
+            for var in observed_vars:
+                if var not in explicit_intercepts:
+                    i = spec._idx(var)
+                    m_free[i] = True
+                    m_values[i] = 0.0  # starting value (overridden by Model with sample means)
+                    params.append(ParamInfo(var, "~1", "1", free=True, value=0.0))
 
-        # Latent variable intercepts fixed to 0 (identification)
-        # They stay at m_free[i] = False, m_values[i] = 0.0
+        # Latent variable intercepts: fixed to 0 by default, freed for growth models
+        if int_lv_free:
+            for lv in latent_vars:
+                if lv not in explicit_intercepts:
+                    i = spec._idx(lv)
+                    m_free[i] = True
+                    m_values[i] = 0.0
+                    params.append(ParamInfo(lv, "~1", "1", free=True, value=0.0))
 
         spec.m_free = m_free
         spec.m_values = m_values
