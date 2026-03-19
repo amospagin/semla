@@ -242,6 +242,7 @@ def batch_bayes(
     func: str = "cfa",
     cpu_cores: int = 4,
     gpu: bool | str = "auto",
+    gpu_models: list[str] | None = None,
     warmup: int = 1000,
     draws: int = 1000,
     chains: int = 1,
@@ -269,6 +270,10 @@ def batch_bayes(
         Number of CPU worker processes (default 4).
     gpu : bool or "auto"
         Whether to use GPU.  ``"auto"`` detects availability.
+    gpu_models : list[str] or None
+        Explicit list of model names to run on GPU.  Overrides the
+        automatic complexity-based assignment.  Remaining models run on
+        CPU.  Example: ``gpu_models=["big_sem", "complex_cfa"]``.
     warmup : int
         Number of warmup samples per chain.
     draws : int
@@ -305,15 +310,38 @@ def batch_bayes(
     data_columns = list(data.columns)
     data_dict = {col: data[col].tolist() for col in data_columns}
 
+    # Validate gpu_models
+    if gpu_models is not None:
+        unknown = set(gpu_models) - set(models)
+        if unknown:
+            raise ValueError(f"gpu_models contains unknown model names: {sorted(unknown)}")
+        if not use_gpu:
+            warnings.warn(
+                "gpu_models specified but no GPU available. "
+                "All models will run on CPU.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            gpu_models = None
+
     # Rank models by complexity
     complexity = {name: _count_model_complexity(syntax)
                   for name, syntax in models.items()}
     # Sorted most complex first
     ranked = sorted(complexity.items(), key=lambda x: -x[1])
 
-    # Build the work queue: most complex → GPU, least complex → CPU
-    # GPU takes from the front, CPU takes from the back
-    work_queue = [name for name, _ in ranked]
+    # Build work queues
+    if gpu_models is not None and use_gpu:
+        # Explicit assignment: separate GPU and CPU queues
+        gpu_set = set(gpu_models)
+        # GPU queue: user-specified models, ranked by complexity
+        gpu_queue = [n for n, _ in ranked if n in gpu_set]
+        # CPU queue: everything else, least complex first (reversed)
+        cpu_queue = [n for n, _ in reversed(ranked) if n not in gpu_set]
+    else:
+        # Auto assignment: single queue, GPU takes from front, CPU from back
+        gpu_queue = None
+        cpu_queue = [name for name, _ in ranked]
 
     # Common fit kwargs
     fit_kwargs = {
@@ -331,11 +359,17 @@ def batch_bayes(
     model_seeds = {name: seed + i for i, name in enumerate(models)}
 
     total = len(models)
-    print(f"batch_bayes: {total} models, "
-          f"{cpu_cores} CPU workers"
-          + (", 1 GPU worker" if use_gpu else "")
-          + f" | ranked by complexity: "
-          + ", ".join(f"{n}({complexity[n]})" for n, _ in ranked))
+    if gpu_queue is not None:
+        n_gpu_q = len(gpu_queue)
+        n_cpu_q = len(cpu_queue)
+        print(f"batch_bayes: {total} models ({n_gpu_q} GPU, {n_cpu_q} CPU), "
+              f"{cpu_cores} CPU workers, 1 GPU worker")
+    else:
+        print(f"batch_bayes: {total} models, "
+              f"{cpu_cores} CPU workers"
+              + (", 1 GPU worker" if use_gpu else "")
+              + f" | ranked by complexity: "
+              + ", ".join(f"{n}({complexity[n]})" for n, _ in ranked))
 
     ctx = mp.get_context("spawn")
     results = {}
@@ -356,22 +390,35 @@ def batch_bayes(
             active_futures[future] = (name, backend)
 
         def _fill_slots():
-            """Fill available CPU and GPU slots from the work queue."""
+            """Fill available CPU and GPU slots from the queues."""
             nonlocal gpu_busy
 
-            # GPU: take the most complex remaining model (front of queue)
-            if use_gpu and not gpu_busy and work_queue:
-                name = work_queue.pop(0)
-                _submit(name, "gpu")
-                gpu_busy = True
+            if gpu_queue is not None:
+                # Explicit assignment: separate queues
+                if use_gpu and not gpu_busy and gpu_queue:
+                    name = gpu_queue.pop(0)
+                    _submit(name, "gpu")
+                    gpu_busy = True
 
-            # CPU: take the least complex remaining models (back of queue)
-            cpu_active = sum(1 for _, (_, b) in active_futures.items()
-                           if b == "cpu")
-            while cpu_active < cpu_cores and work_queue:
-                name = work_queue.pop()  # pop from back (least complex)
-                _submit(name, "cpu")
-                cpu_active += 1
+                cpu_active = sum(1 for _, (_, b) in active_futures.items()
+                               if b == "cpu")
+                while cpu_active < cpu_cores and cpu_queue:
+                    name = cpu_queue.pop(0)  # already sorted least complex first
+                    _submit(name, "cpu")
+                    cpu_active += 1
+            else:
+                # Auto assignment: single queue, GPU from front, CPU from back
+                if use_gpu and not gpu_busy and cpu_queue:
+                    name = cpu_queue.pop(0)  # most complex (front)
+                    _submit(name, "gpu")
+                    gpu_busy = True
+
+                cpu_active = sum(1 for _, (_, b) in active_futures.items()
+                               if b == "cpu")
+                while cpu_active < cpu_cores and cpu_queue:
+                    name = cpu_queue.pop()  # least complex (back)
+                    _submit(name, "cpu")
+                    cpu_active += 1
 
         # Initial fill
         _fill_slots()
