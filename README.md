@@ -12,6 +12,8 @@
 
 ---
 
+> **Early development (v0.1.0).** The API may change. Results should be validated against established tools before use in published research.
+
 **semla** is a Python package for structural equation modeling, confirmatory factor analysis, latent growth curves, IRT, and other latent variable models. It uses [lavaan](https://lavaan.ugent.be/)-style syntax for model specification, so if you know lavaan, you already know the syntax.
 
 Choose between frequentist estimation (ML, MLR, DWLS, FIML) and full Bayesian MCMC inference — from the same interface. Run batches of Bayesian models in parallel across CPU cores and GPU.
@@ -299,6 +301,20 @@ mardia_test(df[["x1", "x2", "x3"]].values)
 | AIC / BIC | Information criteria | Lower is better |
 | WAIC | Widely Applicable IC (Bayesian) | Lower is better |
 | LOO | Leave-One-Out CV (Bayesian) | Lower is better |
+
+## Validation
+
+semla is validated against [lavaan](https://lavaan.ugent.be/) 0.6-20. Parameter estimates, standard errors, and fit indices are compared across a range of model types:
+
+- Simple and multi-factor CFA (with and without mean structure, equality constraints)
+- SEM with regressions and mediation
+- Higher-order (second-order) factor models
+- Linear and nonlinear latent growth curves
+- Cross-lagged panel models
+- Multi-group invariance (configural through strict)
+- MLR, DWLS, and FIML estimators
+
+Estimates and SEs typically match lavaan within 0.01, and fit indices within 0.005. The full validation suite (200+ tests) runs against hardcoded lavaan reference values. See `tests/test_validate_*.py` for details.
 
 ## Coming from R?
 
