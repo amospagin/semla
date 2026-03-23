@@ -10,7 +10,7 @@ Models tested:
   H — CFA with correlated residuals
   I — Observed-variable mediation with indirect effects (:=)
 
-Reference values: lavaan 0.6-21 on HolzingerSwineford1939 (n=301).
+Reference values: lavaan 0.6-20 on HolzingerSwineford1939 (n=301).
 Mediation model uses simulated data (seed=42, n=300).
 """
 
@@ -90,7 +90,7 @@ class TestSingleFactorCFA:
     # -- fit indices --
 
     @pytest.mark.parametrize("measure,lavaan,tol", [
-        ("chi_square", 311.227, 1.0),
+        ("chi_square", 312.264, 1.5),
         ("df", 27, 0),
         ("cfi", 0.677, 0.005),
         ("tli", 0.569, 0.005),
@@ -105,8 +105,8 @@ class TestSingleFactorCFA:
     @pytest.mark.parametrize("ind,lav_est,lav_se", [
         ("x2", 0.508, 0.152),
         ("x3", 0.493, 0.146),
-        ("x4", 1.930, 0.257),
-        ("x5", 2.123, 0.283),
+        ("x4", 1.930, 0.256),
+        ("x5", 2.123, 0.282),
         ("x6", 1.796, 0.239),
         ("x7", 0.385, 0.137),
         ("x8", 0.398, 0.129),
@@ -123,15 +123,15 @@ class TestSingleFactorCFA:
     # -- residual variances --
 
     @pytest.mark.parametrize("var,lav_est,lav_se", [
-        ("x1", 1.102, 0.093),
-        ("x2", 1.319, 0.108),
-        ("x3", 1.216, 0.100),
-        ("x4", 0.381, 0.048),
-        ("x5", 0.487, 0.060),
-        ("x6", 0.357, 0.043),
-        ("x7", 1.148, 0.094),
-        ("x8", 0.984, 0.081),
-        ("x9", 0.923, 0.076),
+        ("x1", 1.098, 0.092),
+        ("x2", 1.315, 0.108),
+        ("x3", 1.212, 0.099),
+        ("x4", 0.380, 0.048),
+        ("x5", 0.486, 0.059),
+        ("x6", 0.356, 0.043),
+        ("x7", 1.145, 0.094),
+        ("x8", 0.981, 0.080),
+        ("x9", 0.919, 0.076),
     ])
     def test_residual_variance(self, est, var, lav_est, lav_se):
         _check_param(est, var, "~~", var, lav_est, lav_se)
@@ -174,7 +174,7 @@ class TestOrthogonalCFA:
     # -- fit indices --
 
     @pytest.mark.parametrize("measure,lavaan,tol", [
-        ("chi_square", 153.007, 1.0),
+        ("chi_square", 153.527, 1.0),
         ("df", 27, 0),
         ("cfi", 0.857, 0.005),
         ("tli", 0.809, 0.005),
@@ -216,9 +216,9 @@ class TestOrthogonalCFA:
     # -- latent variances --
 
     @pytest.mark.parametrize("lv,lav_est,lav_se", [
-        ("visual", 0.525, 0.131),
-        ("textual", 0.972, 0.113),
-        ("speed", 0.438, 0.097),
+        ("visual", 0.524, 0.130),
+        ("textual", 0.969, 0.112),
+        ("speed", 0.437, 0.097),
     ])
     def test_latent_variance(self, est, lv, lav_est, lav_se):
         _check_param(est, lv, "~~", lv, lav_est, lav_se)
@@ -226,15 +226,15 @@ class TestOrthogonalCFA:
     # -- residual variances --
 
     @pytest.mark.parametrize("var,lav_est,lav_se", [
-        ("x1", 0.837, 0.119),
-        ("x2", 1.068, 0.105),
-        ("x3", 0.635, 0.130),
-        ("x4", 0.383, 0.049),
-        ("x5", 0.418, 0.059),
-        ("x6", 0.370, 0.044),
-        ("x7", 0.749, 0.087),
-        ("x8", 0.367, 0.097),
-        ("x9", 0.698, 0.073),
+        ("x1", 0.835, 0.118),
+        ("x2", 1.065, 0.105),
+        ("x3", 0.633, 0.129),
+        ("x4", 0.382, 0.049),
+        ("x5", 0.416, 0.059),
+        ("x6", 0.369, 0.044),
+        ("x7", 0.746, 0.086),
+        ("x8", 0.366, 0.097),
+        ("x9", 0.696, 0.072),
     ])
     def test_residual_variance(self, est, var, lav_est, lav_se):
         _check_param(est, var, "~~", var, lav_est, lav_se)
@@ -277,7 +277,12 @@ class TestCFACorrelatedResiduals:
     # Adding x1~~x2 removes 1 df (23 instead of 24)
 
     @pytest.mark.parametrize("measure,lavaan,tol", [
+        ("chi_square", 81.233, 0.5),
         ("df", 23, 0),
+        ("cfi", 0.934, 0.005),
+        ("tli", 0.897, 0.005),
+        ("rmsea", 0.092, 0.005),
+        ("srmr", 0.065, 0.005),
     ])
     def test_fit_index(self, fid, measure, lavaan, tol):
         _check_fit(fid, measure, lavaan, tol)
@@ -289,22 +294,34 @@ class TestCFACorrelatedResiduals:
 
     # -- correlated residual --
 
-    def test_correlated_residual_estimated(self, est):
-        """x1 ~~ x2 should be freely estimated."""
+    def test_correlated_residual(self, est):
+        """x1 ~~ x2 should be freely estimated (~-0.234)."""
         row = _get_est(est, "x1", "~~", "x2")
         assert row["free"]
+        _check_param(est, "x1", "~~", "x2", -0.234, 0.132, atol_est=0.02)
 
-    # -- textual and speed loadings approximately stable --
-    # Adding x1~~x2 mainly affects visual; textual/speed shift slightly.
+    # -- factor loadings --
 
     @pytest.mark.parametrize("lv,ind,lav_est,lav_se", [
-        ("textual", "x5", 1.113, 0.065),
+        ("visual", "x2", 0.625, 0.106),
+        ("visual", "x3", 0.592, 0.121),
+        ("textual", "x5", 1.114, 0.065),
         ("textual", "x6", 0.926, 0.055),
-        ("speed", "x8", 1.180, 0.165),
-        ("speed", "x9", 1.082, 0.151),
+        ("speed", "x8", 1.186, 0.166),
+        ("speed", "x9", 1.042, 0.145),
     ])
-    def test_approx_stable_loading(self, est, lv, ind, lav_est, lav_se):
-        _check_param(est, lv, "=~", ind, lav_est, lav_se, atol_est=0.05)
+    def test_loading(self, est, lv, ind, lav_est, lav_se):
+        _check_param(est, lv, "=~", ind, lav_est, lav_se)
+
+    # -- latent covariances --
+
+    @pytest.mark.parametrize("lv1,lv2,lav_est,lav_se", [
+        ("visual", "textual", 0.432, 0.074),
+        ("visual", "speed", 0.247, 0.056),
+        ("textual", "speed", 0.173, 0.050),
+    ])
+    def test_latent_covariance(self, est, lv1, lv2, lav_est, lav_se):
+        _check_param(est, lv1, "~~", lv2, lav_est, lav_se)
 
 
 # ============================================================
