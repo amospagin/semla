@@ -9,6 +9,7 @@ from .invariance import measurementInvariance
 from .irt import irt, IRTModel
 from . import datasets
 from . import priors
+from .simulate import simulate_power
 
 
 def set_host_devices(n: int) -> None:
@@ -29,5 +30,6 @@ __all__ = [
     "Model", "MultiGroupModel", "cfa", "sem", "growth", "irt", "IRTModel",
     "batch_bayes", "chi_square_diff_test", "compare_models", "mardia_test",
     "measurementInvariance", "datasets", "priors",
+    "simulate_power",
     "set_host_devices", "__version__",
 ]
