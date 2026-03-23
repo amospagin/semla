@@ -302,6 +302,9 @@ def build_specification(
 
     params: list[ParamInfo] = []
 
+    # Track user-specified covariances so auto-add doesn't override them
+    _user_specified_cov: set[tuple[str, str]] = set()
+
     # --- Process tokens ---
     first_indicator: dict[str, bool] = {}  # track first indicator per latent
 
@@ -358,6 +361,8 @@ def build_specification(
             for term in tok.rhs:
                 i = spec._idx(tok.lhs)
                 j = spec._idx(term.var)
+                _user_specified_cov.add((tok.lhs, term.var))
+                _user_specified_cov.add((term.var, tok.lhs))
                 if term.fixed:
                     val = term.start_value if term.start_value is not None else 0.0
                     S_values[i, j] = val
@@ -389,6 +394,8 @@ def build_specification(
                 lv_j = latent_vars[j_idx]
                 ii = spec._idx(lv_i)
                 jj = spec._idx(lv_j)
+                if (lv_i, lv_j) in _user_specified_cov:
+                    continue  # user already specified this covariance
                 if not S_free[ii, jj] and S_values[ii, jj] == 0.0:
                     S_free[ii, jj] = True
                     S_free[jj, ii] = True
@@ -418,6 +425,8 @@ def build_specification(
                     lv_j = exogenous_lv[j_idx]
                     ii = spec._idx(lv_i)
                     jj = spec._idx(lv_j)
+                    if (lv_i, lv_j) in _user_specified_cov:
+                        continue  # user already specified this covariance
                     if not S_free[ii, jj] and S_values[ii, jj] == 0.0:
                         S_free[ii, jj] = True
                         S_free[jj, ii] = True
