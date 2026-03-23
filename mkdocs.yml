@@ -46,8 +46,12 @@ nav:
   - User Guide:
     - CFA: guide/cfa.md
     - SEM: guide/sem.md
+    - Growth Curves: guide/growth.md
     - Multi-Group Analysis: guide/multigroup.md
     - Ordinal Data (DWLS): guide/dwls.md
+    - Bayesian Estimation: guide/bayesian.md
+    - IRT: guide/irt.md
+    - Cookbook: guide/cookbook.md
   - API Reference: api.md
   - Coming from lavaan?: lavaan-migration.md
   - Roadmap: roadmap.md

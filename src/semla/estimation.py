@@ -128,7 +128,104 @@ def ml_gradient(
     n_obs: int,
     sample_mean: np.ndarray = None,
 ) -> np.ndarray:
-    """Compute the gradient of F_ML via finite differences."""
+    """Compute the analytic gradient of F_ML.
+
+    Uses the RAM derivative formulas:
+        dF/dA_{rc} = (B^T G C + B G C)[r,c] + mean terms
+        dF/dS_{rc} = (B^T G B)[r,c] (×2 for off-diagonal)
+
+    where B = (I-A)^{-1}, G = F^T W F, W = Σ^{-1} - Σ^{-1}(S+dd^T)Σ^{-1},
+    C = B S B^T.
+    """
+    A, S_mat = spec.unpack(theta)
+    n = A.shape[0]
+    I = np.eye(n)
+
+    try:
+        B = np.linalg.inv(I - A)
+    except np.linalg.LinAlgError:
+        return _ml_gradient_numerical(theta, spec, sample_cov, n_obs, sample_mean)
+
+    C = B @ S_mat @ B.T
+    sigma = spec.F @ C @ spec.F.T
+
+    try:
+        sigma_inv = np.linalg.inv(sigma)
+    except np.linalg.LinAlgError:
+        return _ml_gradient_numerical(theta, spec, sample_cov, n_obs, sample_mean)
+
+    # W matrix (covariance part)
+    W_arg = sample_cov.copy()
+    d = None
+    if spec.meanstructure and sample_mean is not None:
+        m = spec.unpack_m(theta)
+        mu = _model_implied_mean(A, m, spec.F)
+        if mu is not None:
+            d = sample_mean - mu
+            W_arg = W_arg + np.outer(d, d)
+
+    W = sigma_inv - sigma_inv @ W_arg @ sigma_inv
+    G = spec.F.T @ W @ spec.F
+
+    # Gradient matrix for A parameters: D_A = 2 * B^T @ G @ C
+    GC = G @ C
+    D_A = 2.0 * B.T @ GC
+
+    # Gradient matrix for S parameters: D_S = B^T @ G @ B
+    D_S = B.T @ G @ B
+
+    # Mean gradient contributions
+    D_A_mean = None
+    D_m_mean = None
+    if d is not None:
+        q = B.T @ spec.F.T @ sigma_inv @ d
+        P = B @ m
+        D_A_mean = -2.0 * np.outer(q, P)
+        D_m_mean = -2.0 * q
+
+    # Extract raw gradient in parameter order
+    # 1. A_free (row-major)
+    grad_A = D_A[spec.A_free]
+    if D_A_mean is not None:
+        grad_A = grad_A + D_A_mean[spec.A_free]
+
+    # 2. S_free_lower (lower triangle, row-major)
+    S_lower = spec._S_free_lower
+    grad_S_raw = D_S.copy()
+    # Off-diagonal elements need factor of 2
+    for r in range(n):
+        for c in range(r):
+            if S_lower[r, c]:
+                grad_S_raw[r, c] = 2.0 * D_S[r, c]
+    grad_S = grad_S_raw[S_lower]
+
+    # 3. m_free (if meanstructure)
+    parts = [grad_A, grad_S]
+    if spec.meanstructure and spec.m_free is not None and D_m_mean is not None:
+        grad_m = D_m_mean[spec.m_free]
+        parts.append(grad_m)
+
+    raw_grad = np.concatenate(parts)
+
+    # Apply constraint map (sum gradients for equal-constrained params)
+    if spec._constraint_map is not None:
+        n_eff = int(spec._constraint_map.max()) + 1
+        eff_grad = np.zeros(n_eff)
+        for i in range(len(raw_grad)):
+            eff_grad[spec._constraint_map[i]] += raw_grad[i]
+        return eff_grad
+
+    return raw_grad
+
+
+def _ml_gradient_numerical(
+    theta: np.ndarray,
+    spec: ModelSpecification,
+    sample_cov: np.ndarray,
+    n_obs: int,
+    sample_mean: np.ndarray = None,
+) -> np.ndarray:
+    """Fallback: compute gradient via finite differences."""
     eps = 1e-7
     grad = np.zeros_like(theta)
     f0 = ml_objective(theta, spec, sample_cov, n_obs, sample_mean)
